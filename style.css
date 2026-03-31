@@ -1,0 +1,281 @@
+ * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box
+}
+
+:root {
+    --bg: #0a0e17;
+    --s1: #111827;
+    --s2: #1a2236;
+    --a: #38bdf8;
+    --a2: #818cf8;
+    --a3: #34d399;
+    --a4: #f472b6;
+    --a5: #fb923c;
+    --t: #e2e8f0;
+    --t2: #94a3b8;
+    --t3: #64748b;
+    --bd: #1e293b;
+    --cb: #0d1117
+}
+
+html {
+    scroll-behavior: smooth
+}
+
+body {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--t);
+    font-size: 13.5px;
+    line-height: 1.7
+}
+
+::-webkit-scrollbar {
+    width: 5px
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--s2);
+    border-radius: 3px
+}
+
+.w {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1.5rem
+}
+
+.hero {
+    text-align: center;
+    padding: 3rem 1rem 2.5rem
+}
+
+.hero h1 {
+    font-family: 'Outfit', sans-serif;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 900;
+    background: linear-gradient(135deg, #fff, var(--a), var(--a2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: .5rem
+}
+
+.hero p {
+    color: var(--t2);
+    font-size: .85rem
+}
+
+.nav {
+    position: sticky;
+    top: 0;
+    z-index: 99;
+    background: rgba(10, 14, 23, .92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--bd);
+    overflow-x: auto;
+    white-space: nowrap;
+    padding: .5rem 1rem
+}
+
+.nav::-webkit-scrollbar {
+    display: none
+}
+
+.nav a {
+    color: var(--t3);
+    text-decoration: none;
+    font-size: .68rem;
+    padding: 3px 7px;
+    border-radius: 3px;
+    transition: .2s
+}
+
+.nav a:hover {
+    color: var(--a);
+    background: rgba(56, 189, 248, .08)
+}
+
+.ch {
+    margin: 2rem 0;
+    padding-top: .8rem
+}
+
+.ch-n {
+    font-size: .62rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--a);
+    text-transform: uppercase;
+    margin-bottom: .2rem
+}
+
+.ch-t {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: #fff;
+    padding-bottom: .5rem;
+    border-bottom: 2px solid var(--bd);
+    margin-bottom: 1rem
+}
+
+.sub {
+    font-family: 'Outfit', sans-serif;
+    font-size: .95rem;
+    font-weight: 700;
+    color: var(--a3);
+    margin: 1.3rem 0 .5rem;
+    padding-left: .5rem;
+    border-left: 3px solid var(--a3)
+}
+
+pre {
+    background: var(--cb);
+    border: 1px solid var(--bd);
+    border-radius: 7px;
+    padding: .8rem 1rem;
+    overflow-x: auto;
+    margin-bottom: .6rem;
+    line-height: 1.85;
+    font-size: .8rem;
+    color: #c9d1d9
+}
+
+.kw {
+    color: #ff7b72
+}
+
+.fn {
+    color: #d2a8ff
+}
+
+.str {
+    color: #a5d6ff
+}
+
+.typ {
+    color: #79c0ff
+}
+
+.cm {
+    color: #6e7681;
+    font-style: italic
+}
+
+.num {
+    color: #79c0ff
+}
+
+.r {
+    overflow-x: auto;
+    margin-bottom: 1rem;
+    border-radius: 7px;
+    border: 1px solid var(--bd)
+}
+
+.r table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .78rem
+}
+
+.r thead {
+    background: var(--s2)
+}
+
+.r th {
+    padding: 6px 10px;
+    text-align: left;
+    color: var(--a);
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    border-bottom: 1px solid var(--bd);
+    font-weight: 600
+}
+
+.r td {
+    padding: 5px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, .03);
+    color: var(--t2)
+}
+
+.r tr:last-child td {
+    border-bottom: none
+}
+
+.n {
+    color: var(--a4);
+    font-style: italic
+}
+
+.h {
+    color: var(--a3);
+    font-weight: 600
+}
+
+.x {
+    text-decoration: line-through;
+    color: var(--a4)
+}
+
+.i {
+    background: var(--s1);
+    border: 1px solid var(--bd);
+    border-left: 3px solid var(--a);
+    border-radius: 5px;
+    padding: .6rem .8rem;
+    margin-bottom: .8rem;
+    font-size: .8rem;
+    color: var(--t2)
+}
+
+.i.w {
+    border-left-color: var(--a5)
+}
+
+.i.g {
+    border-left-color: var(--a3)
+}
+
+.i.p {
+    border-left-color: var(--a4)
+}
+
+.i b {
+    color: #fff
+}
+
+.d {
+    color: var(--t2);
+    font-size: .82rem;
+    margin-bottom: .6rem
+}
+
+.sep {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--bd), transparent);
+    margin: 1.8rem 0
+}
+
+.footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--t3);
+    font-size: .72rem;
+    border-top: 1px solid var(--bd);
+    margin-top: 2rem
+}
+
+@media (max-width: 768px) {
+    .w {
+        padding: 1rem .6rem
+    }
+
+    pre {
+        font-size: .72rem;
+        padding: .6rem
+    }
+}
