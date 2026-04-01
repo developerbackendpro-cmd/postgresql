@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
+
 <body style="user-select: none;" oncontextmenu="return false;">
 <div class="hero">
     <h1>PostgreSQL To'liq Amaliy Darslik</h1>
@@ -1682,6 +1683,1389 @@ pg_restore --clean -d ecommerce backup.dump        <span class="cm">◄--- Avval
 <div class="i g">💡 <b>Har kuni avtomatik zaxira!</b> crontab da: <code>0 3 * * * pg_dump -Fc mydb > /backups/mydb_$(date +%Y%m%d).dump</code></div>
 </div><div class="sep"></div>
 
+<div class="ch" id="c63"><div class="ch-n">63-Bob — Ilg'or</div><div class="ch-t">🟢 WITH RECURSIVE — Rekursiv So'rovlar</div>
+<div class="d">🧠 <b>Bu nima?</b> WITH RECURSIVE — so'rov o'zini o'zi qayta-qayta chaqiradi, to'xtatish shartiga yetguncha. Daraxtsimon (ierarxik) ma'lumotlarni o'qish uchun ishlatiladi.<br>
+🎯 <b>Nima uchun kerak?</b> Xodim → boshlig'i → boshlig'ining boshlig'i... yoki kategoriya → ota-kategoriya zanjirini topish uchun. Oddiy SQL bilan buni qilib bo'lmaydi!<br>
+📍 <b>Qayerda ishlatiladi?</b> Tashkilot tuzilmasi, fayl tizimlari, kategoriya daraxti, marshrutlar grafi, raqamlar generatsiyasi.</div>
+<div class="sub">⚙️ Sintaksis</div>
+<pre>
+<span class="kw">WITH RECURSIVE</span> cte_nomi <span class="kw">AS</span> (
+    <span class="cm">-- 1. Boshlang'ich so'rov (ANCHOR) — birinchi qatorni topadi</span>
+    <span class="kw">SELECT</span> ... <span class="kw">FROM</span> jadval <span class="kw">WHERE</span> shart
+
+    <span class="kw">UNION ALL</span>
+
+    <span class="cm">-- 2. Rekursiv so'rov — o'zini o'zi chaqiradi</span>
+    <span class="kw">SELECT</span> ... <span class="kw">FROM</span> jadval
+    <span class="kw">JOIN</span> cte_nomi <span class="kw">ON</span> shart              <span class="cm">◄--- CTE o'ziga murojaat!</span>
+    <span class="kw">WHERE</span> toxtatish_sharti               <span class="cm">◄--- Bu bo'lmasa cheksiz aylanadi!</span>
+)
+<span class="kw">SELECT</span> * <span class="kw">FROM</span> cte_nomi;
+</pre>
+<div class="sub">🔍 Chuqur tushuntirish — qanday ishlaydi?</div>
+<div class="i g">
+💡 <b>Ishlash tartibi:</b><br>
+1️⃣ <b>ANCHOR</b> bajariladi → birinchi natija olinadi (masalan: Direktor)<br>
+2️⃣ <b>Rekursiv qism</b> shu natijaga asoslanib yangi qatorlar topadi (masalan: Direktor ga bo'ysunadiganlar)<br>
+3️⃣ Yana rekursiv qism yangi topilgan qatorlarga asoslanib davom etadi<br>
+4️⃣ Yangi qator topilmasa yoki WHERE sharti to'xtatsa → tugaydi<br>
+<b>UNION ALL</b> — takrorlarni ham oladi (tez). <b>UNION</b> — takrorsiz (sekin, cheksiz aylanishdan himoya).
+</div>
+<div class="sub">💻 Amaliy misol 1: Raqamlar generatsiyasi (1-10)</div>
+<pre>
+<span class="kw">WITH RECURSIVE</span> raqamlar <span class="kw">AS</span> (
+    <span class="kw">SELECT</span> <span class="num">1</span> <span class="kw">AS</span> n                               <span class="cm">◄--- ANCHOR: 1 dan boshla</span>
+    <span class="kw">UNION ALL</span>
+    <span class="kw">SELECT</span> n + <span class="num">1</span> <span class="kw">FROM</span> raqamlar                 <span class="cm">◄--- Rekursiv: +1 qo'sh</span>
+    <span class="kw">WHERE</span> n &lt; <span class="num">10</span>                                 <span class="cm">◄--- TO'XTATISH: 10 gacha</span>
+)
+<span class="kw">SELECT</span> * <span class="kw">FROM</span> raqamlar;
+</pre>
+<div class="r"><table><thead><tr><th>n</th></tr></thead><tbody>
+<tr><td class="h">1</td></tr><tr><td class="h">2</td></tr><tr><td class="h">3</td></tr><tr><td class="h">4</td></tr><tr><td class="h">5</td></tr><tr><td class="h">6</td></tr><tr><td class="h">7</td></tr><tr><td class="h">8</td></tr><tr><td class="h">9</td></tr><tr><td class="h">10</td></tr>
+</tbody></table></div>
+<div class="sub">💻 Amaliy misol 2: Xodimlar daraxti (ierarxiya)</div>
+<pre>
+<span class="cm">-- emp jadvalidan (27-bobda yaratilgan): Direktor Ali → Boshlig Vali → Xodim Soli, Guli</span>
+<span class="kw">WITH RECURSIVE</span> daraxt <span class="kw">AS</span> (
+    <span class="cm">-- ANCHOR: eng yuqoridagi xodim (boshlig'i yo'q)</span>
+    <span class="kw">SELECT</span> id, name, manager_id,
+           <span class="num">0</span> <span class="kw">AS</span> daraja,                          <span class="cm">◄--- Daraja (chuqurlik)</span>
+           name::<span class="typ">TEXT</span> <span class="kw">AS</span> yol                      <span class="cm">◄--- Yo'l (path)</span>
+    <span class="kw">FROM</span> emp
+    <span class="kw">WHERE</span> manager_id <span class="kw">IS NULL</span>                    <span class="cm">◄--- Boshlig'i yo'q = Direktor</span>
+
+    <span class="kw">UNION ALL</span>
+
+    <span class="cm">-- REKURSIV: har bir xodimning qo'l ostidagilarini top</span>
+    <span class="kw">SELECT</span> e.id, e.name, e.manager_id,
+           d.daraja + <span class="num">1</span>,                          <span class="cm">◄--- Daraja +1</span>
+           d.yol || <span class="str">' → '</span> || e.name               <span class="cm">◄--- Yo'lga qo'sh</span>
+    <span class="kw">FROM</span> emp e
+    <span class="kw">JOIN</span> daraxt d <span class="kw">ON</span> e.manager_id = d.id         <span class="cm">◄--- Bola → Ota bog'lanish</span>
+)
+<span class="kw">SELECT</span>
+    <span class="fn">REPEAT</span>(<span class="str">'  '</span>, daraja) || name <span class="kw">AS</span> xodim,     <span class="cm">◄--- Darajaga qarab chekinish</span>
+    daraja, yol
+<span class="kw">FROM</span> daraxt
+<span class="kw">ORDER BY</span> yol;
+</pre>
+<div class="r"><table><thead><tr><th>xodim</th><th>daraja</th><th>yol</th></tr></thead><tbody>
+<tr><td class="h">Direktor Ali</td><td>0</td><td>Direktor Ali</td></tr>
+<tr><td class="h">&nbsp;&nbsp;Boshlig Vali</td><td>1</td><td>Direktor Ali → Boshlig Vali</td></tr>
+<tr><td class="h">&nbsp;&nbsp;&nbsp;&nbsp;Xodim Guli</td><td>2</td><td>Direktor Ali → Boshlig Vali → Xodim Guli</td></tr>
+<tr><td class="h">&nbsp;&nbsp;&nbsp;&nbsp;Xodim Soli</td><td>2</td><td>Direktor Ali → Boshlig Vali → Xodim Soli</td></tr>
+</tbody></table></div>
+<div class="sub">💻 Amaliy misol 3: Kategoriya daraxti (ota-bola)</div>
+<pre>
+<span class="kw">CREATE TABLE</span> cat_tree (id <span class="typ">SERIAL PRIMARY KEY</span>, name <span class="typ">TEXT</span>,
+    parent_id <span class="typ">INT REFERENCES</span> cat_tree(id));
+<span class="kw">INSERT INTO</span> cat_tree (name, parent_id) <span class="kw">VALUES</span>
+    (<span class="str">'Elektronika'</span>, <span class="num">NULL</span>),                        <span class="cm">◄--- id=1, ildiz</span>
+    (<span class="str">'Telefonlar'</span>,  <span class="num">1</span>),                           <span class="cm">◄--- id=2, Elektronika ichida</span>
+    (<span class="str">'Kompyuterlar'</span>,<span class="num">1</span>),                           <span class="cm">◄--- id=3, Elektronika ichida</span>
+    (<span class="str">'iPhone'</span>,      <span class="num">2</span>),                           <span class="cm">◄--- id=4, Telefonlar ichida</span>
+    (<span class="str">'Samsung'</span>,     <span class="num">2</span>),                           <span class="cm">◄--- id=5, Telefonlar ichida</span>
+    (<span class="str">'MacBook'</span>,     <span class="num">3</span>);                           <span class="cm">◄--- id=6, Kompyuterlar ichida</span>
+
+<span class="kw">WITH RECURSIVE</span> tree <span class="kw">AS</span> (
+    <span class="kw">SELECT</span> id, name, parent_id, <span class="num">0</span> <span class="kw">AS</span> lvl,
+           <span class="kw">ARRAY</span>[id] <span class="kw">AS</span> path                      <span class="cm">◄--- Yo'lni massivda saqlash</span>
+    <span class="kw">FROM</span> cat_tree <span class="kw">WHERE</span> parent_id <span class="kw">IS NULL</span>
+    <span class="kw">UNION ALL</span>
+    <span class="kw">SELECT</span> c.id, c.name, c.parent_id, t.lvl + <span class="num">1</span>,
+           t.path || c.id                          <span class="cm">◄--- Massivga qo'shish</span>
+    <span class="kw">FROM</span> cat_tree c <span class="kw">JOIN</span> tree t <span class="kw">ON</span> c.parent_id = t.id
+)
+<span class="kw">SELECT</span> <span class="fn">REPEAT</span>(<span class="str">'──'</span>, lvl) || name <span class="kw">AS</span> kategoriya, lvl, path
+<span class="kw">FROM</span> tree <span class="kw">ORDER BY</span> path;                          <span class="cm">◄--- path bo'yicha tartiblash = to'g'ri daraxt</span>
+</pre>
+<div class="r"><table><thead><tr><th>kategoriya</th><th>lvl</th><th>path</th></tr></thead><tbody>
+<tr><td class="h">Elektronika</td><td>0</td><td>{1}</td></tr>
+<tr><td class="h">──Telefonlar</td><td>1</td><td>{1,2}</td></tr>
+<tr><td class="h">────iPhone</td><td>2</td><td>{1,2,4}</td></tr>
+<tr><td class="h">────Samsung</td><td>2</td><td>{1,2,5}</td></tr>
+<tr><td class="h">──Kompyuterlar</td><td>1</td><td>{1,3}</td></tr>
+<tr><td class="h">────MacBook</td><td>2</td><td>{1,3,6}</td></tr>
+</tbody></table></div>
+<pre><span class="kw">DROP TABLE</span> cat_tree;                              <span class="cm">◄--- Tozalash</span></pre>
+<div class="sub">🧪 Mashqlar</div>
+<div class="i p">
+📝 <b>1-mashq:</b> WITH RECURSIVE yordamida Fibonachchi sonlarini generatsiya qiling (1, 1, 2, 3, 5, 8, 13, 21, 34, 55).<br>
+📝 <b>2-mashq:</b> emp jadvalidan "Xodim Soli" ning barcha yuqoridagi boshliqlari zanjirini toping (pastdan yuqoriga).<br>
+📝 <b>3-mashq:</b> Hafta kunlarini generatsiya qiling: 2026-01-01 dan 2026-01-07 gacha (7 kun).
+</div>
+<div class="sub">⚠️ Xatolar</div>
+<div class="i w">
+⚠️ <b>1. To'xtatish shartini unutish</b> → cheksiz aylanish! PostgreSQL xotira tugaguncha ishlaydi. Himoya: <code>WHERE daraja &lt; 100</code> qo'shing.<br>
+⚠️ <b>2. UNION ALL o'rniga UNION</b> → sekinroq (har safar takrorlikni tekshiradi), lekin cheksiz aylanishdan himoya qiladi.<br>
+⚠️ <b>3. Siklik ma'lumot</b> (A→B→A) → cheksiz aylanish! Himoya: path massivida <code>WHERE NOT c.id = ANY(t.path)</code>.
+</div>
+<div class="sub">🚀 Real hayotda</div>
+<div class="i g">
+💼 <b>E-commerce:</b> Kategoriya daraxti (Elektronika → Telefonlar → iPhone 16 Pro)<br>
+💼 <b>HR tizimi:</b> Tashkilot strukturasi (Direktor → Bo'lim boshliqlari → Xodimlar)<br>
+💼 <b>Fayl tizimi:</b> Papka ichidagi papkalar (/home/user/docs/projects/...)<br>
+💼 <b>Marshrut:</b> Shaharlar orasidagi yo'llarni topish (graf traversal)
+</div>
+</div><div class="sep"></div>
+
+
+<div class="ch" id="c64"><div class="ch-n">64-Bob — Ilg'or</div><div class="ch-t">🟢 WINDOW FUNCTIONS — Chuqur O'rganish</div>
+<div class="d">🧠 <b>Bu nima?</b> 37-40-boblarda ROW_NUMBER, RANK, LAG ko'rdik. Bu bobda qolgan barcha window funksiyalar: FIRST_VALUE, LAST_VALUE, NTH_VALUE, PERCENT_RANK, CUME_DIST va WINDOW clause chuqur o'rganiladi.<br>
+🎯 <b>Nima uchun kerak?</b> GROUP BY qatorlarni birlashtiradi (7→3). Window funksiyalar esa BARCHA qatorlarni saqlaydi, lekin har biriga hisob qo'shadi. Analitika uchun eng kuchli vosita!<br>
+📍 <b>Qayerda?</b> Hisobotlar, o'rtacha taqqoslash, running total, top-N per group, foiz hisoblash.</div>
+<div class="sub">⚙️ FIRST_VALUE / LAST_VALUE / NTH_VALUE</div>
+<pre>
+<span class="kw">SELECT</span> title, category_id, price,
+  <span class="fn">FIRST_VALUE</span>(title) <span class="kw">OVER</span>(                     <span class="cm">◄--- Har guruhda ENG BIRINCHI</span>
+    <span class="kw">PARTITION BY</span> category_id
+    <span class="kw">ORDER BY</span> price <span class="kw">DESC</span>
+  ) <span class="kw">AS</span> eng_qimmat,
+  <span class="fn">LAST_VALUE</span>(title) <span class="kw">OVER</span>(                      <span class="cm">◄--- Har guruhda ENG OXIRGI</span>
+    <span class="kw">PARTITION BY</span> category_id
+    <span class="kw">ORDER BY</span> price <span class="kw">DESC</span>
+    <span class="kw">ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING</span>  <span class="cm">◄--- SHART!</span>
+  ) <span class="kw">AS</span> eng_arzon,
+  <span class="fn">NTH_VALUE</span>(title, <span class="num">2</span>) <span class="kw">OVER</span>(                   <span class="cm">◄--- 2-o'rindagi mahsulot</span>
+    <span class="kw">PARTITION BY</span> category_id
+    <span class="kw">ORDER BY</span> price <span class="kw">DESC</span>
+    <span class="kw">ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING</span>
+  ) <span class="kw">AS</span> ikkinchi
+<span class="kw">FROM</span> product <span class="kw">WHERE</span> category_id <span class="kw">IS NOT NULL</span>;
+</pre>
+<div class="r"><table><thead><tr><th>title</th><th>cat_id</th><th>price</th><th class="h">eng_qimmat</th><th class="h">eng_arzon</th><th class="h">ikkinchi</th></tr></thead><tbody>
+<tr><td>iPhone 16 Pro</td><td>1</td><td>15M</td><td class="h">iPhone 16 Pro</td><td class="h">Xiaomi 14</td><td class="h">Samsung S25</td></tr>
+<tr><td>Samsung S25</td><td>1</td><td>12M</td><td class="h">iPhone 16 Pro</td><td class="h">Xiaomi 14</td><td class="h">Samsung S25</td></tr>
+<tr><td>Xiaomi 14</td><td>1</td><td>5M</td><td class="h">iPhone 16 Pro</td><td class="h">Xiaomi 14</td><td class="h">Samsung S25</td></tr>
+</tbody></table></div>
+<div class="sub">⚙️ PERCENT_RANK / CUME_DIST — foiz hisoblash</div>
+<pre>
+<span class="kw">SELECT</span> title, price,
+  <span class="fn">PERCENT_RANK</span>() <span class="kw">OVER</span>(<span class="kw">ORDER BY</span> price) <span class="kw">AS</span> foiz_rank,  <span class="cm">◄--- 0 dan 1 gacha foiz</span>
+  <span class="fn">CUME_DIST</span>()    <span class="kw">OVER</span>(<span class="kw">ORDER BY</span> price) <span class="kw">AS</span> kumulyativ   <span class="cm">◄--- Kumulyativ taqsimot</span>
+<span class="kw">FROM</span> product;
+</pre>
+<div class="r"><table><thead><tr><th>title</th><th>price</th><th class="h">foiz_rank</th><th class="h">kumulyativ</th></tr></thead><tbody>
+<tr><td>SQL Darsligi</td><td>85K</td><td class="h">0.00</td><td class="h">0.125</td></tr>
+<tr><td>Python Kitob</td><td>95K</td><td class="h">0.14</td><td class="h">0.250</td></tr>
+<tr><td>Stul</td><td>500K</td><td class="h">0.29</td><td class="h">0.375</td></tr>
+<tr><td>MacBook Pro</td><td>25M</td><td class="h">1.00</td><td class="h">1.000</td></tr>
+</tbody></table></div>
+<div class="sub">💻 WINDOW clause — qayta ishlatish</div>
+<pre>
+<span class="kw">SELECT</span> title, price,
+  <span class="fn">ROW_NUMBER</span>() <span class="kw">OVER</span> w <span class="kw">AS</span> tartib,
+  <span class="fn">RANK</span>()       <span class="kw">OVER</span> w <span class="kw">AS</span> rank,
+  <span class="fn">SUM</span>(price)   <span class="kw">OVER</span> w <span class="kw">AS</span> yigma
+<span class="kw">FROM</span> product
+<span class="kw">WINDOW</span> w <span class="kw">AS</span> (<span class="kw">ORDER BY</span> price <span class="kw">DESC</span>);             <span class="cm">◄--- 1 marta yozing, ko'p marta ishlating</span>
+</pre>
+<div class="sub">💻 Running Total (yig'ma hisob)</div>
+<pre>
+<span class="kw">SELECT</span> title, price,
+  <span class="fn">SUM</span>(price) <span class="kw">OVER</span>(<span class="kw">ORDER BY</span> price
+    <span class="kw">ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</span>
+  ) <span class="kw">AS</span> yigma_jami                              <span class="cm">◄--- Boshidan hozirgi qatorgacha</span>
+<span class="kw">FROM</span> product;
+</pre>
+<div class="r"><table><thead><tr><th>title</th><th>price</th><th class="h">yigma_jami</th></tr></thead><tbody>
+<tr><td>SQL Darsligi</td><td>85000</td><td class="h">85000</td></tr>
+<tr><td>Python Kitob</td><td>95000</td><td class="h">180000</td></tr>
+<tr><td>Stul</td><td>500000</td><td class="h">680000</td></tr>
+<tr><td>MacBook Pro</td><td>25000000</td><td class="h">66680000</td></tr>
+</tbody></table></div>
+<div class="sub">🔍 Frame turlari</div>
+<div class="r"><table><thead><tr><th>Frame</th><th>Ma'nosi</th></tr></thead><tbody>
+<tr><td class="h">ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW</td><td>Boshidan hozirgi qatorgacha (default)</td></tr>
+<tr><td class="h">ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING</td><td>Oldingi 1 + hozirgi + keyingi 1 (harakatlanuvchi o'rtacha)</td></tr>
+<tr><td class="h">ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING</td><td>BARCHA qatorlar (LAST_VALUE uchun shart!)</td></tr>
+<tr><td class="h">RANGE BETWEEN ...</td><td>Qiymatga asoslangan oraliq</td></tr>
+</tbody></table></div>
+<div class="sub">🧪 Mashqlar</div>
+<div class="i p">
+📝 <b>1:</b> Har bir kategoriyada eng qimmat va eng arzon mahsulotni FIRST_VALUE/LAST_VALUE bilan toping.<br>
+📝 <b>2:</b> Harakatlanuvchi o'rtacha (moving average) hisoblang: har bir mahsulotning oldingi 1, hozirgi, keyingi 1 narx o'rtachasi.<br>
+📝 <b>3:</b> Mahsulotlarni narx bo'yicha 4 ta guruhga ajrating (NTILE(4)) va har guruhning o'rtacha narxini hisoblang.
+</div>
+<div class="sub">⚠️ Xatolar</div>
+<div class="i w">
+⚠️ <b>LAST_VALUE xatosi:</b> ROWS BETWEEN ... yozmasangiz, default frame faqat boshidan CURRENT ROW gacha — LAST_VALUE noto'g'ri natija beradi!<br>
+⚠️ <b>PARTITION BY unutish:</b> Butun jadval bitta window bo'ladi — natija noto'g'ri bo'lishi mumkin.
+</div>
+<div class="sub">🚀 Real hayotda</div>
+<div class="i g">
+💼 <b>Moliya:</b> Running total (yig'ma balans), harakatlanuvchi o'rtacha (moving average) — aktsiyalar tahlili<br>
+💼 <b>E-commerce:</b> Har kategoriyadan TOP-3 mahsulot, narx o'sish/pasayish tahlili<br>
+💼 <b>HR:</b> Xodimlar maoshini bo'lim o'rtachasiga taqqoslash, foizli reytinglar
+</div>
+</div><div class="sep"></div>
+
+
+<div class="ch" id="c65"><div class="ch-n">65-Bob — Ilg'or</div><div class="ch-t">🟢 GROUPING SETS / CUBE / ROLLUP — Ko'p Darajali Guruhlash</div>
+<div class="d">🧠 <b>Bu nima?</b> Bitta so'rovda bir nechta GROUP BY kombinatsiyasini olish. Masalan: kategoriya bo'yicha jami + umumiy jami — hammasini bitta so'rovda!<br>
+🎯 <b>Nima uchun kerak?</b> Hisobotlar uchun: "kategoriya bo'yicha jami", "oy bo'yicha jami", "umumiy jami" — barchasini alohida so'rov yozmasdan olish mumkin.<br>
+📍 <b>Qayerda?</b> BI dashboardlar, pivot jadvallar, Excel-ga o'xshash hisobotlar.</div>
+<div class="sub">💻 GROUPING SETS — aniq kombinatsiyalar</div>
+<pre>
+<span class="kw">SELECT</span> category_id, is_active,
+  <span class="fn">COUNT</span>(*) <span class="kw">AS</span> soni, <span class="fn">SUM</span>(price) <span class="kw">AS</span> jami
+<span class="kw">FROM</span> product
+<span class="kw">WHERE</span> category_id <span class="kw">IS NOT NULL</span>
+<span class="kw">GROUP BY GROUPING SETS</span> (
+    (category_id),                                <span class="cm">◄--- Kategoriya bo'yicha</span>
+    (is_active),                                  <span class="cm">◄--- Faollik bo'yicha</span>
+    ()                                            <span class="cm">◄--- Umumiy jami</span>
+);
+</pre>
+<div class="r"><table><thead><tr><th>category_id</th><th>is_active</th><th>soni</th><th>jami</th><th>nima</th></tr></thead><tbody>
+<tr><td class="h">1</td><td class="n">NULL</td><td>3</td><td>32000000</td><td>cat=1 jami</td></tr>
+<tr><td class="h">2</td><td class="n">NULL</td><td>2</td><td>180000</td><td>cat=2 jami</td></tr>
+<tr><td class="h">3</td><td class="n">NULL</td><td>2</td><td>34000000</td><td>cat=3 jami</td></tr>
+<tr><td class="n">NULL</td><td class="h">t</td><td>5</td><td>61085000</td><td>active=true jami</td></tr>
+<tr><td class="n">NULL</td><td class="h">f</td><td>2</td><td>5095000</td><td>active=false jami</td></tr>
+<tr><td class="n">NULL</td><td class="n">NULL</td><td class="h">7</td><td class="h">66180000</td><td class="h">UMUMIY JAMI</td></tr>
+</tbody></table></div>
+<div class="sub">💻 ROLLUP — ierarxik jami (yig'indi)</div>
+<pre>
+<span class="kw">SELECT</span> category_id, is_active,
+  <span class="fn">COUNT</span>(*) <span class="kw">AS</span> soni, <span class="fn">SUM</span>(price) <span class="kw">AS</span> jami
+<span class="kw">FROM</span> product <span class="kw">WHERE</span> category_id <span class="kw">IS NOT NULL</span>
+<span class="kw">GROUP BY ROLLUP</span> (category_id, is_active);        <span class="cm">◄--- (cat,active), (cat), ()</span>
+</pre>
+<div class="r"><table><thead><tr><th>category_id</th><th>is_active</th><th>soni</th><th>jami</th><th>nima</th></tr></thead><tbody>
+<tr><td>1</td><td>t</td><td>2</td><td>27000000</td><td>cat=1, active=t</td></tr>
+<tr><td>1</td><td>f</td><td>1</td><td>5000000</td><td>cat=1, active=f</td></tr>
+<tr><td class="h">1</td><td class="n">NULL</td><td class="h">3</td><td class="h">32000000</td><td class="h">cat=1 JAMI</td></tr>
+<tr><td class="n">NULL</td><td class="n">NULL</td><td class="h">7</td><td class="h">66180000</td><td class="h">UMUMIY JAMI</td></tr>
+</tbody></table></div>
+<div class="sub">💻 CUBE — barcha kombinatsiyalar</div>
+<pre>
+<span class="kw">SELECT</span> category_id, is_active, <span class="fn">COUNT</span>(*), <span class="fn">SUM</span>(price)
+<span class="kw">FROM</span> product <span class="kw">WHERE</span> category_id <span class="kw">IS NOT NULL</span>
+<span class="kw">GROUP BY CUBE</span> (category_id, is_active);           <span class="cm">◄--- BARCHA kombinatsiyalar</span>
+<span class="cm">-- Natija: (cat,active), (cat), (active), () — 4 ta kombinatsiya</span>
+</pre>
+<div class="r"><table><thead><tr><th>ROLLUP</th><th>CUBE</th></tr></thead><tbody>
+<tr><td>Ierarxik jami (chapdan o'ngga)</td><td>BARCHA mumkin bo'lgan kombinatsiyalar</td></tr>
+<tr><td>ROLLUP(A,B) = (A,B), (A), ()</td><td>CUBE(A,B) = (A,B), (A), (B), ()</td></tr>
+<tr><td>Hisobotda: "jami" qatorlari</td><td>Hisobotda: pivot jadval</td></tr>
+</tbody></table></div>
+<div class="sub">🧪 Mashqlar</div>
+<div class="i p">
+📝 <b>1:</b> ROLLUP bilan kategoriya va faollik bo'yicha narxlar jamini ko'rsating.<br>
+📝 <b>2:</b> CUBE bilan barcha kombinatsiyalarni oling va GROUPING() funksiyasi bilan qaysi qator "jami" ekanini aniqlang.
+</div>
+</div><div class="sep"></div>
+
+
+<div class="ch" id="c66"><div class="ch-n">66-Bob — Senior</div><div class="ch-t">🟢 ACID — Tranzaksiya Tamoyillari</div>
+<div class="d">🧠 <b>Bu nima?</b> ACID — PostgreSQL ma'lumotlar xavfsizligini kafolatlashi uchun 4 ta tamoyil. Har bir intervyuda 100% so'raladi!<br>
+🎯 <b>Nima uchun kerak?</b> Pul o'tkazish, buyurtma berish, inventar boshqarish — barchasi ACID ga tayanadi. Bu tamoyillarsiz ma'lumotlar buziladi.<br>
+📍 <b>Qayerda?</b> Har qanday database bilan ishlashda. ACID bu SQL ning asosi.</div>
+<div class="sub">🔍 Chuqur tushuntirish</div>
+<pre>
+<span class="cm">-- A = Atomicity  (Bo'linmaslik)  → Hammasi yoki hech narsa</span>
+<span class="cm">-- C = Consistency (Izchillik)    → Qoidalar har doim saqlanadi</span>
+<span class="cm">-- I = Isolation   (Izolyatsiya)  → Tranzaksiyalar bir-biriga xalaqit bermaydi</span>
+<span class="cm">-- D = Durability  (Chidamlilik)  → COMMIT qilingan ma'lumot yo'qolmaydi</span>
+</pre>
+<div class="sub">💻 A — Atomicity: Hammasi yoki hech narsa</div>
+<pre>
+<span class="cm">-- Stsenariy: Ali dan Valiga 100,000 so'm o'tkazish</span>
+<span class="kw">BEGIN</span>;
+  <span class="kw">UPDATE</span> accounts <span class="kw">SET</span> balance = balance - <span class="num">100000</span> <span class="kw">WHERE</span> id = <span class="num">1</span>;  <span class="cm">◄--- Alidan ayirish</span>
+  <span class="kw">UPDATE</span> accounts <span class="kw">SET</span> balance = balance + <span class="num">100000</span> <span class="kw">WHERE</span> id = <span class="num">2</span>;  <span class="cm">◄--- Valiga qo'shish</span>
+<span class="kw">COMMIT</span>;
+<span class="cm">-- Agar 2-UPDATE xato bersa → 1-UPDATE ham BEKOR bo'ladi!</span>
+<span class="cm">-- Natija: Pul yo'qolmaydi, yarim holatda qolmaydi.</span>
+</pre>
+<div class="sub">💻 C — Consistency: Qoidalar buzilmaydi</div>
+<pre>
+<span class="cm">-- CHECK (balance >= 0) qo'yilgan bo'lsa:</span>
+<span class="kw">BEGIN</span>;
+  <span class="kw">UPDATE</span> accounts <span class="kw">SET</span> balance = balance - <span class="num">999999999</span> <span class="kw">WHERE</span> id = <span class="num">1</span>;
+  <span class="cm">-- ❌ CHECK buziladi → xatolik → ROLLBACK</span>
+  <span class="cm">-- Database HECH QACHON noto'g'ri holatda qolmaydi</span>
+<span class="kw">COMMIT</span>;
+</pre>
+<div class="sub">💻 I — Isolation: Tranzaksiyalar alohida</div>
+<pre>
+<span class="cm">-- 2 kishi bir vaqtda bitta tovarni sotib olmoqchi (stock=1):</span>
+<span class="cm">-- Izolyatsiyasiz:</span>
+<span class="cm">--   TX1: SELECT stock → 1 (bor)     TX2: SELECT stock → 1 (bor)</span>
+<span class="cm">--   TX1: UPDATE stock=0             TX2: UPDATE stock=0</span>
+<span class="cm">--   ❌ Muammo: 2 kishi sotib oldi, lekin stock faqat 1 edi!</span>
+<span class="cm">-- Yechim: Isolation levels (67-bob) yoki FOR UPDATE (69-bob)</span>
+</pre>
+<div class="sub">💻 D — Durability: COMMIT qilingan saqlanadi</div>
+<pre>
+<span class="cm">-- COMMIT qilingan ma'lumot diskka yoziladi.</span>
+<span class="cm">-- Server o'chib qolsa ham → WAL (Write-Ahead Log) dan tiklanadi.</span>
+<span class="cm">-- WAL qanday ishlaydi:</span>
+<span class="cm">--   1. O'zgarish avval WAL ga yoziladi (log fayl)</span>
+<span class="cm">--   2. Keyin asosiy ma'lumotlar fayliga yoziladi</span>
+<span class="cm">--   3. Server buzilsa → WAL dan tiklanadi (replay)</span>
+</pre>
+<div class="r"><table><thead><tr><th>Tamoyil</th><th>Ma'nosi</th><th>PostgreSQL mexanizmi</th></tr></thead><tbody>
+<tr><td class="h">Atomicity</td><td>Hammasi yoki hech narsa</td><td>BEGIN/COMMIT/ROLLBACK</td></tr>
+<tr><td class="h">Consistency</td><td>Qoidalar buzilmaydi</td><td>CHECK, FK, UNIQUE, NOT NULL</td></tr>
+<tr><td class="h">Isolation</td><td>Tranzaksiyalar alohida</td><td>MVCC + Isolation levels</td></tr>
+<tr><td class="h">Durability</td><td>COMMIT = saqlanadi</td><td>WAL (Write-Ahead Log)</td></tr>
+</tbody></table></div>
+<div class="sub">🧪 Mashqlar</div>
+<div class="i p">
+📝 <b>1:</b> accounts jadval yarating (id, name, balance) va CHECK(balance >= 0) qo'shing. Pul o'tkazish tranzaksiyasini yozing.<br>
+📝 <b>2:</b> Ataylab xato qiling (balansdan ko'p ayiring) va ROLLBACK ishlashini tekshiring.<br>
+📝 <b>3:</b> SAVEPOINT bilan 3 ta INSERT qiling, 2-INSERT dan keyin SAVEPOINT qo'ying, 3-INSERT dan keyin ROLLBACK TO qiling.
+</div>
+<div class="sub">⚠️ Xatolar</div>
+<div class="i w">
+⚠️ <b>BEGIN yozmaslik:</b> PostgreSQL har bir so'rovni alohida tranzaksiyada bajaradi (auto-commit). Ko'p amallarni birlashtirish uchun BEGIN/COMMIT kerak!<br>
+⚠️ <b>Uzoq tranzaksiya:</b> BEGIN qilib, COMMIT qilmaslik → boshqa tranzaksiyalar kutadi → tizim sekinlashadi.
+</div>
+</div><div class="sep"></div>
+
+<div class="ch" id="c67"><div class="ch-n">67-Bob — Senior</div><div class="ch-t">🟢 Isolation Levels — Izolyatsiya Darajalari</div>
+<div class="d">🧠 <b>Bu nima?</b> Bir vaqtda ishlayotgan tranzaksiyalar bir-birini qanchalik ko'rishini boshqarish. 4 ta daraja bor — har biri turli xil muammolardan himoya qiladi.<br>
+🎯 <b>Nima uchun kerak?</b> Noto'g'ri isolation = ma'lumot buzilishi. Masalan: siz o'qigan narx boshqa tranzaksiya tomonidan o'zgartirilgan bo'lishi mumkin!</div>
+<div class="sub">⚙️ Sintaksis</div>
+<pre>
+<span class="kw">BEGIN ISOLATION LEVEL READ COMMITTED</span>;              <span class="cm">◄--- Default (eng ko'p ishlatiladi)</span>
+<span class="kw">BEGIN ISOLATION LEVEL REPEATABLE READ</span>;             <span class="cm">◄--- Snapshot</span>
+<span class="kw">BEGIN ISOLATION LEVEL SERIALIZABLE</span>;                <span class="cm">◄--- Eng qattiq</span>
+</pre>
+<div class="sub">🔍 3 ta muammo va ulardan himoya</div>
+<pre>
+<span class="cm">-- 1. DIRTY READ: COMMIT qilinMAGAN ma'lumotni o'qish</span>
+<span class="cm">--    PostgreSQL da MUMKIN EMAS (har qanday darajada himoyalangan!)</span>
+
+<span class="cm">-- 2. NON-REPEATABLE READ: bitta TX ichida 2 marta o'qish = farqli natija</span>
+<span class="cm">--    TX1: SELECT price → 15M</span>
+<span class="cm">--    TX2: UPDATE price=20M → COMMIT</span>
+<span class="cm">--    TX1: SELECT price → 20M  ← FARQLI!</span>
+
+<span class="cm">-- 3. PHANTOM READ: bitta TX ichida 2 marta COUNT = farqli natija</span>
+<span class="cm">--    TX1: SELECT COUNT(*) → 7</span>
+<span class="cm">--    TX2: INSERT qator → COMMIT</span>
+<span class="cm">--    TX1: SELECT COUNT(*) → 8  ← YANGI qator paydo bo'ldi!</span>
+</pre>
+<div class="sub">💻 READ COMMITTED (default)</div>
+<pre>
+<span class="kw">BEGIN</span>;  <span class="cm">-- yoki BEGIN ISOLATION LEVEL READ COMMITTED</span>
+  <span class="kw">SELECT</span> price <span class="kw">FROM</span> product <span class="kw">WHERE</span> id = <span class="num">1</span>;      <span class="cm">→ 15000000</span>
+  <span class="cm">-- (boshqa TX: UPDATE price=20M WHERE id=1 → COMMIT)</span>
+  <span class="kw">SELECT</span> price <span class="kw">FROM</span> product <span class="kw">WHERE</span> id = <span class="num">1</span>;      <span class="cm">→ 20000000 ← FARQLI!</span>
+<span class="kw">COMMIT</span>;
+</pre>
+<div class="sub">💻 REPEATABLE READ — snapshot himoyasi</div>
+<pre>
+<span class="kw">BEGIN ISOLATION LEVEL REPEATABLE READ</span>;
+  <span class="kw">SELECT</span> price <span class="kw">FROM</span> product <span class="kw">WHERE</span> id = <span class="num">1</span>;      <span class="cm">→ 15000000</span>
+  <span class="cm">-- (boshqa TX: UPDATE price=20M WHERE id=1 → COMMIT)</span>
+  <span class="kw">SELECT</span> price <span class="kw">FROM</span> product <span class="kw">WHERE</span> id = <span class="num">1</span>;      <span class="cm">→ 15000000 ← BIR XIL!</span>
+<span class="kw">COMMIT</span>;
+</pre>
+<div class="sub">💻 SERIALIZABLE — eng xavfsiz</div>
+<pre>
+<span class="cm">-- 2 ta TX bir-biriga zid bo'lsa → biri XATOLIK beradi:</span>
+<span class="cm">-- ERROR: could not serialize access due to concurrent update</span>
+<span class="cm">-- Dasturda RETRY (qayta urinish) mexanizmi yozing!</span>
+</pre>
+<div class="r"><table><thead><tr><th>Daraja</th><th>Dirty Read</th><th>Non-Repeatable</th><th>Phantom</th><th>Tezlik</th></tr></thead><tbody>
+<tr><td class="h">READ COMMITTED</td><td>❌ Yo'q</td><td>⚠️ Mumkin</td><td>⚠️ Mumkin</td><td>⚡ Tez</td></tr>
+<tr><td class="h">REPEATABLE READ</td><td>❌ Yo'q</td><td>❌ Yo'q</td><td>❌ Yo'q*</td><td>🔄 O'rtacha</td></tr>
+<tr><td class="h">SERIALIZABLE</td><td>❌ Yo'q</td><td>❌ Yo'q</td><td>❌ Yo'q</td><td>🐢 Sekin</td></tr>
+</tbody></table></div>
+<div class="sub">🧪 Mashqlar</div>
+<div class="i p">
+📝 <b>1:</b> 2 ta terminal ochib, READ COMMITTED da non-repeatable read muammosini ko'ring.<br>
+📝 <b>2:</b> Xuddi shu testni REPEATABLE READ da qiling — farqni ko'ring.<br>
+📝 <b>3:</b> SERIALIZABLE da 2 ta TX ni bir vaqtda bitta qatorni yangilashga harakat qiling.
+</div>
+<div class="sub">⚠️ Xatolar</div>
+<div class="i w">⚠️ <b>SERIALIZABLE da RETRY yo'q:</b> Xatolik olasiz lekin qayta urinmasangiz → foydalanuvchi xato ko'radi. DOIMO retry logic yozing!</div>
+<div class="sub">🚀 Real hayotda</div>
+<div class="i g">💼 <b>Ko'pchilik holatda READ COMMITTED yetarli.</b> Bank operatsiyalari, buyurtma tizimlari uchun SERIALIZABLE yoki FOR UPDATE (69-bob) ishlating.</div>
+</div><div class="sep"></div>
+
+
+<div class="ch" id="c68"><div class="ch-n">68-Bob — Senior</div><div class="ch-t">🟢 Deadlock — O'zaro Bloklash</div>
+<div class="d">🧠 <b>Bu nima?</b> 2 ta tranzaksiya bir-birini kutib, hech biri tugamay qolishi. PostgreSQL avtomatik aniqlaydi va birini bekor qiladi.<br>
+🎯 <b>Nima uchun kerak?</b> Production da deadlock = foydalanuvchilar kutadi, tizim sekinlashadi. Oldini olish muhim!</div>
+<div class="sub">🔍 Deadlock qanday sodir bo'ladi</div>
+<pre>
+<span class="cm">-- TX1: UPDATE id=1 (BLOKLADI)     TX2: UPDATE id=2 (BLOKLADI)</span>
+<span class="cm">-- TX1: UPDATE id=2 (KUTMOQDA ⏳)  TX2: UPDATE id=1 (KUTMOQDA ⏳)</span>
+<span class="cm">-- 💀 DEADLOCK! PostgreSQL 1s keyin aniqlaydi va birini ROLLBACK qiladi</span>
+<span class="cm">-- ERROR: deadlock detected</span>
+</pre>
+<div class="sub">💻 Himoyalanish usullari</div>
+<pre>
+<span class="cm">-- 1. Har doim BIR XILDA tartibda bloklang:</span>
+<span class="kw">BEGIN</span>;
+  <span class="kw">UPDATE</span> product <span class="kw">SET</span> price=<span class="num">1</span> <span class="kw">WHERE</span> id=<span class="num">1</span>;      <span class="cm">◄--- Doimo avval kichik id</span>
+  <span class="kw">UPDATE</span> product <span class="kw">SET</span> price=<span class="num">2</span> <span class="kw">WHERE</span> id=<span class="num">2</span>;      <span class="cm">◄--- Keyin katta id</span>
+<span class="kw">COMMIT</span>;
+
+<span class="cm">-- 2. Tranzaksiyani QISQA qiling (tezroq COMMIT)</span>
+<span class="cm">-- 3. Lock timeout:</span>
+<span class="kw">SET</span> lock_timeout = <span class="str">'5s'</span>;                        <span class="cm">◄--- 5s dan ko'p kutmaslik</span>
+<span class="cm">-- 4. Deadlock loglarini kuzating:</span>
+<span class="kw">SHOW</span> deadlock_timeout;                           <span class="cm">◄--- Default: 1s</span>
+</pre>
+<div class="r"><table><thead><tr><th>Himoya</th><th>Tushuntirish</th></tr></thead><tbody>
+<tr><td class="h">Tartibda bloklash</td><td>Barcha TX lar resurslarni BIR XILDA tartibda qulflaydi</td></tr>
+<tr><td class="h">Qisqa TX</td><td>Tez COMMIT — bloklash vaqti kamayadi</td></tr>
+<tr><td class="h">lock_timeout</td><td>Cheksiz kutmaslik uchun</td></tr>
+<tr><td class="h">RETRY</td><td>Deadlock xatosida dastur qayta urinadi</td></tr>
+</tbody></table></div>
+<div class="sub">🧪 Mashqlar</div>
+<div class="i p">📝 <b>1:</b> 2 ta terminal ochib, ataylab deadlock yarating. PostgreSQL xatolik xabarini o'qing.<br>📝 <b>2:</b> lock_timeout=2s o'rnating va uzoq bloklash holatini simulyatsiya qiling.</div>
+</div><div class="sep"></div>
+
+
+<div class="ch" id="c69"><div class="ch-n">69-Bob — Senior</div><div class="ch-t">🟢 Locking & Concurrency (FOR UPDATE / FOR SHARE)</div>
+<div class="d">🧠 <b>Bu nima?</b> SELECT qilganda qatorni qulflab, boshqa TX larga o'zgartirishni taqiqlash. "Avval men, keyin sen" tamoyili.<br>
+🎯 <b>Nima uchun kerak?</b> Chipta sotish, inventar kamaytirish, pul o'tkazish — bir vaqtda 2 kishi bitta resursni olishni oldini olish uchun.</div>
+<div class="sub">💻 FOR UPDATE — yozish uchun qulflash</div>
+<pre>
+<span class="cm">-- Koncert chipta sotish (faqat 1 ta qolgan!):</span>
+<span class="kw">BEGIN</span>;
+  <span class="kw">SELECT</span> * <span class="kw">FROM</span> tickets
+  <span class="kw">WHERE</span> id = <span class="num">42</span> <span class="kw">AND</span> status = <span class="str">'mavjud'</span>
+  <span class="kw">FOR UPDATE</span>;                                    <span class="cm">◄--- Bu qatorni QULFLADI</span>
+
+  <span class="cm">-- Agar chipta mavjud bo'lsa:</span>
+  <span class="kw">UPDATE</span> tickets <span class="kw">SET</span> status = <span class="str">'sotildi'</span>, buyer_id = <span class="num">100</span>
+  <span class="kw">WHERE</span> id = <span class="num">42</span>;
+<span class="kw">COMMIT</span>;                                          <span class="cm">◄--- Qulflash OCHILADI</span>
+</pre>
+<div class="sub">💻 Variantlar</div>
+<pre>
+<span class="kw">FOR UPDATE</span>              <span class="cm">◄--- Qulflash (boshqa TX kutadi)</span>
+<span class="kw">FOR UPDATE NOWAIT</span>       <span class="cm">◄--- Qulflangan → darhol XATOLIK</span>
+<span class="kw">FOR UPDATE SKIP LOCKED</span>  <span class="cm">◄--- Qulflangan qatorni TASHLAB O'TISH</span>
+<span class="kw">FOR SHARE</span>               <span class="cm">◄--- O'qishga ruxsat, YOZISHGA yo'q</span>
+</pre>
+<div class="sub">💻 SKIP LOCKED — queue (navbat) tizimi</div>
+<pre>
+<span class="cm">-- Bir nechta worker bitta jadvaldan vazifa oladi:</span>
+<span class="kw">BEGIN</span>;
+  <span class="kw">SELECT</span> id, task <span class="kw">FROM</span> tasks
+  <span class="kw">WHERE</span> status = <span class="str">'pending'</span>
+  <span class="kw">ORDER BY</span> created_at <span class="kw">LIMIT</span> <span class="num">1</span>
+  <span class="kw">FOR UPDATE SKIP LOCKED</span>;                        <span class="cm">◄--- Boshqa worker olganini o'tkazadi</span>
+  <span class="kw">UPDATE</span> tasks <span class="kw">SET</span> status = <span class="str">'processing'</span> <span class="kw">WHERE</span> id = ...;
+<span class="kw">COMMIT</span>;
+</pre>
+<div class="r"><table><thead><tr><th>Qulflash</th><th>Nima qiladi</th><th>Qachon</th></tr></thead><tbody>
+<tr><td class="h">FOR UPDATE</td><td>Yozish + o'qishni bloklaydi</td><td>Ma'lumotni yangilash</td></tr>
+<tr><td class="h">FOR SHARE</td><td>Faqat yozishni bloklaydi</td><td>O'chirilmasligini kafolatlash</td></tr>
+<tr><td class="h">NOWAIT</td><td>Kutmaydi, xatolik beradi</td><td>Tezkor javob kerak</td></tr>
+<tr><td class="h">SKIP LOCKED</td><td>Bloklangan qatorni o'tkazadi</td><td>Queue tizimi</td></tr>
+</tbody></table></div>
+<div class="sub">🧪 Mashqlar</div>
+<div class="i p">📝 <b>1:</b> Chipta sotish tizimini simulyatsiya qiling: tickets jadval, FOR UPDATE bilan qulflash.<br>📝 <b>2:</b> SKIP LOCKED bilan 3 ta worker uchun queue tizimi yarating.</div>
+<div class="sub">⚠️ Xatolar</div>
+<div class="i w">⚠️ <b>Keraksiz qulflash:</b> Har joyda FOR UPDATE ishlatmang — tizim sekinlashadi. Faqat kerak joyda!</div>
+</div><div class="sep"></div>
+
+
+<div class="ch" id="c70"><div class="ch-n">70-Bob — Senior</div><div class="ch-t">🟢 Database Normalization (1NF, 2NF, 3NF)</div>
+<div class="d">🧠 <b>Bu nima?</b> Jadvallarni to'g'ri loyihalash qoidalari. Ma'lumot takrorlanishini va nomuvofiqlikni bartaraf etish.<br>
+🎯 <b>Nima uchun kerak?</b> Normalizatsiyasiz: Ali 5 ta buyurtma qilsa, ismi 5 joyda saqlanadi. Telefon o'zgarsa → 5 joyni yangilash kerak. 1 tasi esdan chiqsa → NOMUVOFIQLIK!<br>
+📍 <b>Asosiy qoida:</b> Har bir fakt faqat 1 joyda saqlansin!</div>
+<div class="sub">💻 1NF — Birinchi Normal Shakl</div>
+<pre>
+<span class="cm">-- Qoida: Har bir ustunda BITTA atomik (bo'linmas) qiymat</span>
+<span class="cm">-- ❌ BUZILGAN:  name=Ali  | phones=+998901111111, +998902222222</span>
+<span class="cm">-- ✅ TO'G'RI: alohida jadval</span>
+<span class="kw">CREATE TABLE</span> customers (id <span class="typ">SERIAL PRIMARY KEY</span>, name <span class="typ">TEXT</span>);
+<span class="kw">CREATE TABLE</span> phones (id <span class="typ">SERIAL PRIMARY KEY</span>,
+    customer_id <span class="typ">INT REFERENCES</span> customers(id), phone <span class="typ">TEXT</span>);
+</pre>
+<div class="sub">💻 2NF — Ikkinchi Normal Shakl</div>
+<pre>
+<span class="cm">-- Qoida: 1NF + har bir ustun TO'LIQ primary key ga bog'liq</span>
+<span class="cm">-- ❌ BUZILGAN: PK(order_id, product_id) + product_name</span>
+<span class="cm">--   product_name faqat product_id ga bog'liq, order_id ga EMAS!</span>
+<span class="cm">-- ✅ TO'G'RI: products(id, name) + order_items(order_id, product_id, qty)</span>
+</pre>
+<div class="sub">💻 3NF — Uchinchi Normal Shakl</div>
+<pre>
+<span class="cm">-- Qoida: 2NF + transitiv bog'liqlik yo'q</span>
+<span class="cm">-- ❌ BUZILGAN: emp_id | dept_id | dept_name</span>
+<span class="cm">--   dept_name → dept_id ga bog'liq (emp_id ga emas!)</span>
+<span class="cm">-- ✅ TO'G'RI:</span>
+<span class="kw">CREATE TABLE</span> departments (id <span class="typ">SERIAL PRIMARY KEY</span>, name <span class="typ">TEXT</span>);
+<span class="kw">CREATE TABLE</span> employees (id <span class="typ">SERIAL PRIMARY KEY</span>, name <span class="typ">TEXT</span>,
+    dept_id <span class="typ">INT REFERENCES</span> departments(id));      <span class="cm">◄--- Faqat FK</span>
+</pre>
+<div class="r"><table><thead><tr><th>Daraja</th><th>Qoida</th><th>Misol</th></tr></thead><tbody>
+<tr><td class="h">1NF</td><td>Har ustunda 1 ta atomik qiymat</td><td>Telefonlarni alohida jadvalga</td></tr>
+<tr><td class="h">2NF</td><td>1NF + to'liq PK ga bog'liq</td><td>product_name ni products ga</td></tr>
+<tr><td class="h">3NF</td><td>2NF + transitiv bog'liqlik yo'q</td><td>dept_name ni departments ga</td></tr>
+</tbody></table></div>
+<div class="sub">🧪 Mashqlar</div>
+<div class="i p">📝 <b>1:</b> Quyidagi jadval qaysi NF ni buzadi? orders(id, customer_name, customer_phone, product, qty)<br>📝 <b>2:</b> Shu jadvalni 3NF ga keltiring (alohida jadvallar yarating).</div>
+<div class="sub">🚀 Real hayotda</div>
+<div class="i g">💼 Amaliyotda 3NF yetarli! Tezlik muammo bo'lganda → denormalizatsiya (71-bob).</div>
+</div><div class="sep"></div>
+
+
+<div class="ch" id="c71"><div class="ch-n">71-Bob — Senior</div><div class="ch-t">🟢 Denormalization — Tezlik Uchun Takrorlash</div>
+<div class="d">🧠 <b>Bu nima?</b> Normalizatsiyani ataylab buzish — tezlik uchun ma'lumotni takrorlash. Ko'p JOIN = sekin → ba'zi ustunlarni takrorlash = tez.<br>
+🎯 <b>Qachon?</b> FAQAT EXPLAIN ANALYZE bilan sekinlik isbotlanganda! Sababi yo'q denormalizatsiya = kelajakda muammo.</div>
+<pre>
+<span class="cm">-- ✅ Normalizatsiyalangan (to'g'ri, lekin 3 JOIN):</span>
+<span class="kw">SELECT</span> o.id, c.name, p.title
+<span class="kw">FROM</span> orders o <span class="kw">JOIN</span> customers c <span class="kw">ON</span> o.customer_id = c.id
+<span class="kw">JOIN</span> order_items oi <span class="kw">ON</span> o.id = oi.order_id
+<span class="kw">JOIN</span> products p <span class="kw">ON</span> oi.product_id = p.id;
+
+<span class="cm">-- ⚡ Denormalizatsiya (tez, lekin takror):</span>
+<span class="kw">CREATE TABLE</span> orders_flat (order_id <span class="typ">INT</span>,
+    customer_name <span class="typ">TEXT</span>, product_title <span class="typ">TEXT</span>,
+    qty <span class="typ">INT</span>, total <span class="typ">NUMERIC</span>);
+</pre>
+<div class="sub">💻 Usullari</div>
+<pre>
+<span class="cm">-- 1. Materialized View:</span>
+<span class="kw">CREATE MATERIALIZED VIEW</span> report <span class="kw">AS</span>
+  <span class="kw">SELECT</span> p.title, c.title <span class="kw">AS</span> cat, p.price
+  <span class="kw">FROM</span> product p <span class="kw">JOIN</span> category c <span class="kw">ON</span> p.category_id = c.id;
+<span class="kw">REFRESH MATERIALIZED VIEW</span> report;
+
+<span class="cm">-- 2. JSONB snapshot:</span>
+<span class="kw">ALTER TABLE</span> orders <span class="kw">ADD COLUMN</span> snapshot <span class="typ">JSONB</span>;   <span class="cm">◄--- Buyurtma paytidagi holat</span>
+
+<span class="cm">-- 3. Trigger bilan sinxronlash</span>
+</pre>
+<div class="r"><table><thead><tr><th>Normalizatsiya</th><th>Denormalizatsiya</th></tr></thead><tbody>
+<tr><td>Ma'lumot 1 joyda</td><td>Ma'lumot takrorlanadi</td></tr>
+<tr><td>Ko'p JOIN (sekin o'qish)</td><td>Kam JOIN (tez o'qish)</td></tr>
+<tr><td>Yangilash oson</td><td>Yangilash qiyin</td></tr>
+<tr><td>OLTP (tranzaksion)</td><td>OLAP (analitika)</td></tr>
+</tbody></table></div>
+</div><div class="sep"></div>
+
+
+<div class="ch" id="c72"><div class="ch-n">72-Bob — Senior</div><div class="ch-t">🟢 Relationship Modeling (1:1, 1:N, N:M)</div>
+<div class="d">🧠 <b>Bu nima?</b> Jadvallar orasidagi bog'lanishlarni to'g'ri loyihalash. 3 xil munosabat: bitta-bitta, bitta-ko'p, ko'p-ko'p.</div>
+<div class="sub">💻 1:1 — Bitta-Bitta</div>
+<pre>
+<span class="kw">CREATE TABLE</span> users (id <span class="typ">SERIAL PRIMARY KEY</span>, email <span class="typ">TEXT UNIQUE</span>);
+<span class="kw">CREATE TABLE</span> profiles (
+    user_id <span class="typ">INT PRIMARY KEY REFERENCES</span> users(id),  <span class="cm">◄--- PK = FK (1:1!)</span>
+    bio <span class="typ">TEXT</span>, avatar <span class="typ">TEXT</span>);
+</pre>
+<div class="sub">💻 1:N — Bitta-Ko'p</div>
+<pre>
+<span class="cm">-- FK har doim "ko'p" tarafda:</span>
+<span class="cm">-- 1 kategoriya → KO'P mahsulot → category_id product jadvalida</span>
+</pre>
+<div class="sub">💻 N:M — Ko'p-Ko'p (oraliq jadval)</div>
+<pre>
+<span class="kw">CREATE TABLE</span> students (id <span class="typ">SERIAL PRIMARY KEY</span>, name <span class="typ">TEXT</span>);
+<span class="kw">CREATE TABLE</span> courses  (id <span class="typ">SERIAL PRIMARY KEY</span>, title <span class="typ">TEXT</span>);
+<span class="kw">CREATE TABLE</span> enrollments (                       <span class="cm">◄--- ORALIQ jadval</span>
+    student_id <span class="typ">INT REFERENCES</span> students(id),
+    course_id  <span class="typ">INT REFERENCES</span> courses(id),
+    enrolled_at <span class="typ">TIMESTAMP</span> <span class="kw">DEFAULT NOW</span>(),
+    <span class="kw">PRIMARY KEY</span> (student_id, course_id));          <span class="cm">◄--- Composite PK</span>
+
+<span class="kw">INSERT INTO</span> students(name) <span class="kw">VALUES</span>(<span class="str">'Ali'</span>),(<span class="str">'Vali'</span>);
+<span class="kw">INSERT INTO</span> courses(title) <span class="kw">VALUES</span>(<span class="str">'SQL'</span>),(<span class="str">'Python'</span>);
+<span class="kw">INSERT INTO</span> enrollments(student_id,course_id) <span class="kw">VALUES</span>(<span class="num">1</span>,<span class="num">1</span>),(<span class="num">1</span>,<span class="num">2</span>),(<span class="num">2</span>,<span class="num">1</span>);
+
+<span class="kw">SELECT</span> s.name, c.title <span class="kw">FROM</span> enrollments e
+<span class="kw">JOIN</span> students s <span class="kw">ON</span> e.student_id = s.id
+<span class="kw">JOIN</span> courses c <span class="kw">ON</span> e.course_id = c.id <span class="kw">WHERE</span> s.name = <span class="str">'Ali'</span>;
+</pre>
+<div class="r"><table><thead><tr><th>name</th><th>title</th></tr></thead><tbody>
+<tr><td class="h">Ali</td><td>SQL</td></tr><tr><td class="h">Ali</td><td>Python</td></tr>
+</tbody></table></div>
+<pre><span class="kw">DROP TABLE</span> enrollments, courses, students;</pre>
+<div class="r"><table><thead><tr><th>Munosabat</th><th>Tuzilishi</th><th>Misol</th></tr></thead><tbody>
+<tr><td class="h">1:1</td><td>FK = PRIMARY KEY</td><td>user ↔ profile</td></tr>
+<tr><td class="h">1:N</td><td>FK "ko'p" tarafda</td><td>category → products</td></tr>
+<tr><td class="h">N:M</td><td>Oraliq jadval</td><td>students ↔ courses</td></tr>
+</tbody></table></div>
+<div class="sub">🧪 Mashqlar</div>
+<div class="i p">📝 <b>1:</b> Blog tizimi loyihalang: users, posts, tags (N:M), comments (1:N).<br>📝 <b>2:</b> E-commerce: customers, orders, products, order_items loyihalang.</div>
+</div><div class="sep"></div>
+
+<div class="ch" id="c73"><div class="ch-n">73-Bob — Senior</div><div class="ch-t">🟢 EXPLAIN ANALYZE — Chuqur Tahlil</div>
+<div class="d">🧠 <b>Bu nima?</b> So'rov qanday bajarilishini chuqur tahlil qilish. 59-bobda asoslar ko'rildi, bu bobda <b>natijani o'qish, scan turlari, join usullari</b> va <b>muammolarni aniqlash</b> chuqur o'rganiladi.</div>
+<div class="sub">💻 EXPLAIN natijasini o'qish</div>
+<pre>
+<span class="kw">EXPLAIN ANALYZE</span> <span class="kw">SELECT</span> * <span class="kw">FROM</span> product <span class="kw">WHERE</span> price > <span class="num">1000000</span>;
+</pre>
+<div class="r"><table><thead><tr><th>EXPLAIN ANALYZE natijasi</th></tr></thead><tbody>
+<tr><td><code>Seq Scan on product (cost=0.00..1.10 rows=5 width=48) (actual time=0.013..0.015 rows=5 loops=1)</code></td></tr>
+<tr><td><code>&nbsp;&nbsp;Filter: (price > 1000000)</code></td></tr>
+<tr><td><code>&nbsp;&nbsp;Rows Removed by Filter: 3</code></td></tr>
+<tr><td><code>Planning Time: 0.065 ms</code></td></tr>
+<tr><td><code>Execution Time: 0.031 ms</code></td></tr>
+</tbody></table></div>
+<div class="sub">🔍 Muhim tushunchalar</div>
+<pre>
+<span class="cm">-- Seq Scan     = Butun jadvalni o'qish (katta jadvalda SEKIN!)</span>
+<span class="cm">-- Index Scan   = Indeks orqali qidirish (TEZ!)</span>
+<span class="cm">-- cost=0.00..1.10 = taxminiy narx (start_cost..total_cost)</span>
+<span class="cm">-- rows=5       = planner taxmin qilgan qatorlar soni</span>
+<span class="cm">-- actual time  = HAQIQIY bajarilish vaqti (ms)</span>
+<span class="cm">-- loops=1      = necha marta bajarildi</span>
+
+<span class="kw">EXPLAIN</span> <span class="kw">SELECT</span> ...;                              <span class="cm">◄--- Faqat REJA (bajarilmaydi)</span>
+<span class="kw">EXPLAIN ANALYZE</span> <span class="kw">SELECT</span> ...;                     <span class="cm">◄--- Reja + HAQIQIY natija</span>
+<span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>, <span class="kw">BUFFERS</span>) <span class="kw">SELECT</span> ...;          <span class="cm">◄--- + xotira/disk ma'lumoti</span>
+<span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>, <span class="kw">BUFFERS</span>, <span class="kw">FORMAT JSON</span>) ...;   <span class="cm">◄--- JSON formatda (o'qishga qulay)</span>
+</pre>
+<div class="sub">🔍 Scan turlari (yaxshidan yomonga)</div>
+<div class="r"><table><thead><tr><th>Scan</th><th>Ma'nosi</th><th>Tezlik</th></tr></thead><tbody>
+<tr><td class="h">Index Only Scan</td><td>Faqat indeksdan (jadvalga murojaat yo'q)</td><td>⚡⚡⚡</td></tr>
+<tr><td class="h">Index Scan</td><td>Indeks + jadvaldan o'qish</td><td>⚡⚡</td></tr>
+<tr><td class="h">Bitmap Index Scan</td><td>Indeksdan bitmap → jadval</td><td>⚡</td></tr>
+<tr><td class="h">Seq Scan</td><td>Butun jadvalni ketma-ket o'qish</td><td>🐢</td></tr>
+</tbody></table></div>
+<div class="sub">🔍 JOIN turlari</div>
+<div class="r"><table><thead><tr><th>JOIN</th><th>Qachon</th><th>Tezlik</th></tr></thead><tbody>
+<tr><td class="h">Nested Loop</td><td>Kichik jadvallar, indeks bor</td><td>⚡ (kichikda)</td></tr>
+<tr><td class="h">Hash Join</td><td>O'rtacha jadvallar</td><td>⚡ (xotirada)</td></tr>
+<tr><td class="h">Merge Join</td><td>Katta, tartiblangan</td><td>⚡ (tartibda)</td></tr>
+</tbody></table></div>
+<div class="sub">💻 BUFFERS — xotira/disk tahlili</div>
+<pre>
+<span class="kw">EXPLAIN</span> (<span class="kw">ANALYZE</span>, <span class="kw">BUFFERS</span>) <span class="kw">SELECT</span> * <span class="kw">FROM</span> product <span class="kw">WHERE</span> price > <span class="num">1000000</span>;
+<span class="cm">-- Buffers: shared hit=1   ← KESHDAN o'qildi (tez!)</span>
+<span class="cm">-- Buffers: shared read=5  ← DISKDAN o'qildi (sekin!)</span>
+</pre>
+<div class="sub">🧪 Mashqlar</div>
+<div class="i p">📝 <b>1:</b> product jadvalida EXPLAIN ANALYZE bilan indekssiz va indeksli so'rovni solishtiring.<br>📝 <b>2:</b> JOIN so'rovda qaysi JOIN usuli ishlatilayotganini aniqlang.<br>📝 <b>3:</b> BUFFERS bilan keshdan yoki diskdan o'qilayotganini tekshiring.</div>
+<div class="sub">⚠️ Xatolar</div>
+<div class="i w">⚠️ <b>EXPLAIN ANALYZE DELETE/UPDATE:</b> So'rov HAQIQATAN bajariladi! Xavfsiz test uchun: <code>BEGIN; EXPLAIN ANALYZE DELETE...; ROLLBACK;</code></div>
+<div class="sub">🚀 Real hayotda</div>
+<div class="i g">💼 Har bir sekin so'rov uchun birinchi qadam: <b>EXPLAIN ANALYZE</b>. Seq Scan ko'rsangiz → INDEX qo'ying!</div>
+</div><div class="sep"></div>
+
+
+<div class="ch" id="c74"><div class="ch-n">74-Bob — Senior</div><div class="ch-t">🟢 Query Optimization — So'rov Optimallashtirish</div>
+<div class="d">🧠 <b>Bu nima?</b> Sekin so'rovni tezlashtirish strategiyalari. 10 soniyalik so'rovni 10 millisekundga tushirish mumkin!<br>
+🎯 <b>Bu eng muhim Senior skill!</b> Bilmasangiz — dastur sekin ishlaydi, foydalanuvchilar ketadi, server yiqiladi.</div>
+<div class="sub">💻 1. SELECT * dan qoching</div>
+<pre>
+<span class="cm">-- ❌ Yomon:</span> <span class="kw">SELECT</span> * <span class="kw">FROM</span> product;              <span class="cm">← barcha ustunlar o'qiladi</span>
+<span class="cm">-- ✅ Yaxshi:</span> <span class="kw">SELECT</span> title, price <span class="kw">FROM</span> product;  <span class="cm">← faqat kerakli</span>
+</pre>
+<div class="sub">💻 2. WHERE da funksiya = INDEX ishlamaydi!</div>
+<pre>
+<span class="cm">-- ❌</span> <span class="kw">SELECT</span> * <span class="kw">FROM</span> users <span class="kw">WHERE</span> <span class="fn">LOWER</span>(email) = <span class="str">'ali@mail.com'</span>;
+<span class="cm">-- ✅ Expression INDEX:</span> <span class="kw">CREATE INDEX</span> idx <span class="kw">ON</span> users(<span class="fn">LOWER</span>(email));
+</pre>
+<div class="sub">💻 3. Keyset pagination (OFFSET dan qoching!)</div>
+<pre>
+<span class="cm">-- ❌ OFFSET 1M = 1M qatorni o'qib tashlab yuboradi!</span>
+<span class="kw">SELECT</span> * <span class="kw">FROM</span> product <span class="kw">ORDER BY</span> id <span class="kw">LIMIT</span> <span class="num">10</span> <span class="kw">OFFSET</span> <span class="num">1000000</span>;
+<span class="cm">-- ✅ Keyset: INDEX ishlatadi = tez!</span>
+<span class="kw">SELECT</span> * <span class="kw">FROM</span> product <span class="kw">WHERE</span> id > <span class="num">1000000</span> <span class="kw">ORDER BY</span> id <span class="kw">LIMIT</span> <span class="num">10</span>;
+</pre>
+<div class="sub">💻 4. EXISTS vs IN</div>
+<pre>
+<span class="cm">-- ❌ IN: butun subquery xotiraga yuklanadi</span>
+<span class="kw">SELECT</span> * <span class="kw">FROM</span> product <span class="kw">WHERE</span> category_id <span class="kw">IN</span> (<span class="kw">SELECT</span> id <span class="kw">FROM</span> category);
+<span class="cm">-- ✅ EXISTS: birinchi topilganda to'xtaydi</span>
+<span class="kw">SELECT</span> * <span class="kw">FROM</span> product p <span class="kw">WHERE EXISTS</span> (
+    <span class="kw">SELECT</span> <span class="num">1</span> <span class="kw">FROM</span> category c <span class="kw">WHERE</span> c.id = p.category_id);
+</pre>
+<div class="sub">💻 5. FK larga INDEX qo'ying</div>
+<pre>
+<span class="kw">CREATE INDEX</span> idx_prod_cat <span class="kw">ON</span> product(category_id);  <span class="cm">◄--- JOIN tezlashadi!</span>
+</pre>
+<div class="sub">💻 6. Correlated subquery → JOIN</div>
+<pre>
+<span class="cm">-- ❌ Sekin:</span> <span class="kw">SELECT</span> title, (<span class="kw">SELECT</span> <span class="fn">COUNT</span>(*) <span class="kw">FROM</span> orders <span class="kw">WHERE</span> product_id=p.id) <span class="kw">FROM</span> product p;
+<span class="cm">-- ✅ Tez:</span>
+<span class="kw">SELECT</span> p.title, <span class="fn">COUNT</span>(o.id) <span class="kw">FROM</span> product p
+<span class="kw">LEFT JOIN</span> orders o <span class="kw">ON</span> p.id = o.product_id <span class="kw">GROUP BY</span> p.id, p.title;
+</pre>
+<div class="r"><table><thead><tr><th>Strategiya</th><th>Foyda</th></tr></thead><tbody>
+<tr><td class="h">SELECT * → kerakli ustunlar</td><td>Kam I/O, kam xotira</td></tr>
+<tr><td class="h">FK ga INDEX</td><td>JOIN tezlashtirish</td></tr>
+<tr><td class="h">Keyset pagination</td><td>OFFSET dan qochish</td></tr>
+<tr><td class="h">EXISTS vs IN</td><td>Erta to'xtash</td></tr>
+<tr><td class="h">Expression INDEX</td><td>Funksiyali WHERE tezlashtirish</td></tr>
+<tr><td class="h">VACUUM ANALYZE</td><td>Statistikani yangilash</td></tr>
+</tbody></table></div>
+<div class="sub">🧪 Mashqlar</div>
+<div class="i p">📝 <b>1:</b> Sekin so'rov yozing (SELECT *, OFFSET 10000, LIKE '%...%'), keyin har birini optimallashtiring.<br>📝 <b>2:</b> EXPLAIN ANALYZE bilan oldin va keyin solishtiring.</div>
+</div><div class="sep"></div>
+
+
+<div class="ch" id="c75"><div class="ch-n">75-Bob — Senior</div><div class="ch-t">🟢 Index Strategy — Chuqur Indeks Strategiyasi</div>
+<div class="d">🧠 <b>Bu nima?</b> 46-bobda indeks asoslari ko'rildi. Bu bobda <b>murakkab indeks turlari</b> va <b>qachon qaysi indeks ishlatish</b> chuqur o'rganiladi.</div>
+<div class="sub">💻 Composite Index (ko'p ustunli)</div>
+<pre>
+<span class="kw">CREATE INDEX</span> idx <span class="kw">ON</span> product(category_id, price);
+<span class="cm">-- Tartib muhim! Chapdan o'ngga:</span>
+<span class="cm">-- ✅ WHERE category_id = 1                → ishlaydi</span>
+<span class="cm">-- ✅ WHERE category_id = 1 AND price > 5M → ishlaydi</span>
+<span class="cm">-- ❌ WHERE price > 5M                      → ishlaMAYDI!</span>
+</pre>
+<div class="sub">💻 Partial Index (shartli)</div>
+<pre>
+<span class="kw">CREATE INDEX</span> idx <span class="kw">ON</span> product(title) <span class="kw">WHERE</span> is_active = <span class="num">true</span>;
+<span class="cm">-- 1M qatordan 10K faol → indeks 100x kichik va tezroq!</span>
+</pre>
+<div class="sub">💻 Covering Index (INCLUDE)</div>
+<pre>
+<span class="kw">CREATE INDEX</span> idx <span class="kw">ON</span> product(category_id) <span class="kw">INCLUDE</span> (title, price);
+<span class="cm">-- SELECT title, price WHERE category_id=1 → Index Only Scan (ENG TEZ!)</span>
+</pre>
+<div class="sub">💻 Expression Index</div>
+<pre>
+<span class="kw">CREATE INDEX</span> idx <span class="kw">ON</span> users(<span class="fn">LOWER</span>(email));         <span class="cm">◄--- Funksiya bo'yicha</span>
+<span class="kw">CREATE INDEX</span> idx <span class="kw">ON</span> users((data->><span class="str">'city'</span>));       <span class="cm">◄--- JSONB kalit bo'yicha</span>
+</pre>
+<div class="sub">⚠️ Index qachon ishlaMAYDI?</div>
+<pre>
+<span class="cm">-- 1. Jadvalning >10-20% qaytarilganda (Seq Scan tezroq!)</span>
+<span class="cm">-- 2. Ustun ustida funksiya (expression index yo'q bo'lsa)</span>
+<span class="cm">-- 3. Composite index da chap ustun tushsa: INDEX(a,b) → WHERE b=1 → ❌</span>
+<span class="cm">-- 4. NOT IN, != operatorlari</span>
+<span class="cm">-- 5. Statistika eskirganda → ANALYZE product;</span>
+</pre>
+<div class="r"><table><thead><tr><th>Indeks</th><th>Qachon</th><th>Misol</th></tr></thead><tbody>
+<tr><td class="h">B-tree</td><td>=, &lt;, >, BETWEEN, ORDER BY</td><td>ON product(price)</td></tr>
+<tr><td class="h">Composite</td><td>Ko'p ustunli WHERE</td><td>ON product(cat_id, price)</td></tr>
+<tr><td class="h">Partial</td><td>Faqat qism uchun</td><td>ON p(title) WHERE active</td></tr>
+<tr><td class="h">Covering</td><td>Index Only Scan</td><td>ON p(cat_id) INCLUDE(title)</td></tr>
+<tr><td class="h">Expression</td><td>Funksiya bo'yicha</td><td>ON users(LOWER(email))</td></tr>
+<tr><td class="h">GIN</td><td>JSONB, Array, FTS</td><td>USING GIN(data)</td></tr>
+<tr><td class="h">GiST</td><td>Geometrik, masofa</td><td>USING GIST(location)</td></tr>
+<tr><td class="h">BRIN</td><td>Katta, tartibli jadval</td><td>USING BRIN(created_at)</td></tr>
+</tbody></table></div>
+<div class="sub">🧪 Mashqlar</div>
+<div class="i p">📝 <b>1:</b> Composite index yarating va EXPLAIN bilan chapdan o'ngga qoidasini tekshiring.<br>📝 <b>2:</b> Partial index yarating va oddiy index bilan hajmini solishtiring (pg_relation_size).</div>
+</div><div class="sep"></div>
+
+
+<div class="ch" id="c76"><div class="ch-n">76-Bob — Senior</div><div class="ch-t">🟢 Performance Tuning — Server Sozlash</div>
+<div class="d">🧠 <b>Bu nima?</b> PostgreSQL default sozlamalari 512MB RAM ga mo'ljallangan — juda konservativ! Serverga mos sozlash 2-10x tezlashtirishi mumkin.</div>
+<div class="sub">💻 Eng muhim parametrlar</div>
+<pre>
+<span class="cm">-- shared_buffers — PostgreSQL kesh (Default: 128MB → Tavsiya: RAM 25%)</span>
+<span class="kw">ALTER SYSTEM SET</span> shared_buffers = <span class="str">'4GB'</span>;
+
+<span class="cm">-- work_mem — har bir sort/hash uchun (Default: 4MB)</span>
+<span class="kw">ALTER SYSTEM SET</span> work_mem = <span class="str">'64MB'</span>;
+
+<span class="cm">-- effective_cache_size — OS kesh taxmini (Default: 4GB → RAM 50-75%)</span>
+<span class="kw">ALTER SYSTEM SET</span> effective_cache_size = <span class="str">'12GB'</span>;
+
+<span class="cm">-- maintenance_work_mem — VACUUM/INDEX uchun (Default: 64MB)</span>
+<span class="kw">ALTER SYSTEM SET</span> maintenance_work_mem = <span class="str">'512MB'</span>;
+
+<span class="cm">-- SSD uchun:</span>
+<span class="kw">ALTER SYSTEM SET</span> random_page_cost = <span class="num">1.1</span>;          <span class="cm">◄--- Default 4.0 (HDD)</span>
+<span class="kw">ALTER SYSTEM SET</span> effective_io_concurrency = <span class="num">200</span>;
+
+<span class="kw">SELECT</span> pg_reload_conf();                          <span class="cm">◄--- shared_buffers uchun restart!</span>
+</pre>
+<div class="sub">💻 VACUUM</div>
+<pre>
+<span class="cm">-- O'chirilgan/yangilangan qatorlar = dead tuples. VACUUM tozalaydi.</span>
+<span class="kw">VACUUM</span> product;                                   <span class="cm">◄--- Dead tuples tozalash</span>
+<span class="kw">VACUUM ANALYZE</span> product;                           <span class="cm">◄--- + statistika yangilash</span>
+<span class="kw">VACUUM FULL</span> product;                              <span class="cm">◄--- To'liq tozalash (jadval QULFLANADI!)</span>
+<span class="kw">SHOW</span> autovacuum;                                  <span class="cm">◄--- Avtomatik yoqilganmi?</span>
+</pre>
+<div class="r"><table><thead><tr><th>Parametr</th><th>Default</th><th>16GB RAM</th><th>Vazifa</th></tr></thead><tbody>
+<tr><td class="h">shared_buffers</td><td>128MB</td><td>4GB</td><td>PG kesh</td></tr>
+<tr><td class="h">work_mem</td><td>4MB</td><td>64MB</td><td>Sort/hash</td></tr>
+<tr><td class="h">effective_cache_size</td><td>4GB</td><td>12GB</td><td>OS kesh</td></tr>
+<tr><td class="h">maintenance_work_mem</td><td>64MB</td><td>512MB</td><td>VACUUM/INDEX</td></tr>
+<tr><td class="h">random_page_cost</td><td>4.0</td><td>1.1</td><td>SSD sozlash</td></tr>
+</tbody></table></div>
+<div class="sub">⚠️ Xatolar</div>
+<div class="i w">⚠️ <b>work_mem juda katta:</b> 100 parallel so'rov × 256MB = 25GB! Har bir sort/hash operatsiya uchun ajratiladi.</div>
+</div><div class="sep"></div>
+
+
+<div class="ch" id="c77"><div class="ch-n">77-Bob — Senior</div><div class="ch-t">🟢 JSONB — Chuqur Ishlash</div>
+<div class="d">🧠 <b>Bu nima?</b> 44-bobda JSONB asoslari ko'rildi. Bu bobda <b>ichma-ich navigatsiya, massiv yoyish, indekslash, aggregation</b> chuqur o'rganiladi.</div>
+<div class="sub">💻 Ichma-ich navigatsiya</div>
+<pre>
+<span class="kw">CREATE TABLE</span> orders_j (id <span class="typ">SERIAL PRIMARY KEY</span>, data <span class="typ">JSONB</span>);
+<span class="kw">INSERT INTO</span> orders_j(data) <span class="kw">VALUES</span>(<span class="str">'{"customer":{"name":"Ali","address":{"city":"Toshkent"}},"items":[{"product":"iPhone","qty":1,"price":15000000},{"product":"Case","qty":2,"price":50000}]}'</span>);
+
+<span class="kw">SELECT</span>
+  data-><span class="str">'customer'</span>->><span class="str">'name'</span> <span class="kw">AS</span> ism,                 <span class="cm">◄--- Ali</span>
+  data-><span class="str">'customer'</span>-><span class="str">'address'</span>->><span class="str">'city'</span> <span class="kw">AS</span> shahar,   <span class="cm">◄--- Toshkent</span>
+  data-><span class="str">'items'</span>-><span class="num">0</span>->><span class="str">'product'</span> <span class="kw">AS</span> birinchi,           <span class="cm">◄--- iPhone</span>
+  <span class="fn">JSONB_ARRAY_LENGTH</span>(data-><span class="str">'items'</span>) <span class="kw">AS</span> soni           <span class="cm">◄--- 2</span>
+<span class="kw">FROM</span> orders_j;
+</pre>
+<div class="r"><table><thead><tr><th>ism</th><th>shahar</th><th>birinchi</th><th>soni</th></tr></thead><tbody>
+<tr><td class="h">Ali</td><td class="h">Toshkent</td><td class="h">iPhone</td><td class="h">2</td></tr>
+</tbody></table></div>
+<div class="sub">💻 JSONB_ARRAY_ELEMENTS — massivni yoyish</div>
+<pre>
+<span class="kw">SELECT</span> elem->><span class="str">'product'</span> <span class="kw">AS</span> mahsulot,
+       (elem->><span class="str">'price'</span>)::<span class="typ">NUMERIC</span> * (elem->><span class="str">'qty'</span>)::<span class="typ">INT</span> <span class="kw">AS</span> jami
+<span class="kw">FROM</span> orders_j, <span class="fn">JSONB_ARRAY_ELEMENTS</span>(data-><span class="str">'items'</span>) elem;
+</pre>
+<div class="r"><table><thead><tr><th>mahsulot</th><th>jami</th></tr></thead><tbody>
+<tr><td class="h">iPhone</td><td>15000000</td></tr>
+<tr><td class="h">Case</td><td>100000</td></tr>
+</tbody></table></div>
+<div class="sub">💻 JSONB indekslash</div>
+<pre>
+<span class="kw">CREATE INDEX</span> idx_gin <span class="kw">ON</span> orders_j <span class="kw">USING GIN</span>(data);                    <span class="cm">◄--- @>, ?, ?| uchun</span>
+<span class="kw">CREATE INDEX</span> idx_name <span class="kw">ON</span> orders_j((data-><span class="str">'customer'</span>->><span class="str">'name'</span>));   <span class="cm">◄--- Aniq kalit</span>
+<span class="kw">CREATE INDEX</span> idx_path <span class="kw">ON</span> orders_j <span class="kw">USING GIN</span>(data jsonb_path_ops);  <span class="cm">◄--- 2x kichik!</span>
+</pre>
+<div class="sub">💻 JSONB yaratish funksiyalari</div>
+<pre>
+<span class="kw">SELECT</span> <span class="fn">JSONB_BUILD_OBJECT</span>(<span class="str">'name'</span>, title, <span class="str">'price'</span>, price) <span class="kw">FROM</span> product <span class="kw">LIMIT</span> <span class="num">2</span>;
+<span class="cm">-- → {"name": "iPhone 16 Pro", "price": 15000000}</span>
+
+<span class="kw">SELECT</span> <span class="fn">JSONB_AGG</span>(<span class="fn">JSONB_BUILD_OBJECT</span>(<span class="str">'title'</span>, title, <span class="str">'price'</span>, price))
+<span class="kw">FROM</span> product <span class="kw">WHERE</span> category_id = <span class="num">1</span>;
+<span class="cm">-- → [{"title":"iPhone 16 Pro","price":15M}, {"title":"Samsung S25","price":12M}, ...]</span>
+</pre>
+<pre><span class="kw">DROP TABLE</span> orders_j;</pre>
+<div class="r"><table><thead><tr><th>Funksiya</th><th>Vazifasi</th></tr></thead><tbody>
+<tr><td class="h">JSONB_ARRAY_ELEMENTS()</td><td>Massivni qatorlarga</td></tr>
+<tr><td class="h">JSONB_EACH()</td><td>Obyektni key-value ga</td></tr>
+<tr><td class="h">JSONB_BUILD_OBJECT()</td><td>SQL → JSONB</td></tr>
+<tr><td class="h">JSONB_AGG()</td><td>Qatorlar → JSONB massiv</td></tr>
+<tr><td class="h">JSONB_STRIP_NULLS()</td><td>NULL larni olib tashlash</td></tr>
+<tr><td class="h">JSONB_TYPEOF()</td><td>Tur aniqlash</td></tr>
+</tbody></table></div>
+<div class="sub">🧪 Mashqlar</div>
+<div class="i p">📝 <b>1:</b> JSONB ustunli jadval yarating, ichma-ich ma'lumot qo'shing, va navigatsiya qiling.<br>📝 <b>2:</b> JSONB_AGG bilan kategoriya bo'yicha mahsulotlarni JSON massivga yig'ing.</div>
+</div><div class="sep"></div>
+
+
+<div class="ch" id="c78"><div class="ch-n">78-Bob — Senior</div><div class="ch-t">🟢 PL/pgSQL — Chuqur Dasturlash</div>
+<div class="d">🧠 <b>Bu nima?</b> 50-bobda asosiy function/procedure ko'rildi. Bu bobda <b>o'zgaruvchilar, %ROWTYPE, IF/ELSIF, FOR LOOP, EXCEPTION, RAISE, cursor</b> chuqur o'rganiladi.</div>
+<div class="sub">💻 O'zgaruvchilar</div>
+<pre>
+<span class="kw">CREATE OR REPLACE FUNCTION</span> test_vars() <span class="kw">RETURNS</span> <span class="typ">TEXT</span> <span class="kw">AS</span> $$
+<span class="kw">DECLARE</span>
+    ism      <span class="typ">TEXT</span> := <span class="str">'Ali'</span>;                      <span class="cm">◄--- Oddiy</span>
+    qator    product%ROWTYPE;                     <span class="cm">◄--- Jadval qatori turi</span>
+    max_narx product.price%TYPE;                  <span class="cm">◄--- Ustun turi</span>
+<span class="kw">BEGIN</span>
+    <span class="kw">SELECT</span> * <span class="kw">INTO</span> qator <span class="kw">FROM</span> product <span class="kw">WHERE</span> id = <span class="num">1</span>;
+    <span class="kw">SELECT</span> <span class="fn">MAX</span>(price) <span class="kw">INTO</span> max_narx <span class="kw">FROM</span> product;
+    <span class="kw">RETURN</span> qator.title || <span class="str">' — '</span> || max_narx;
+<span class="kw">END</span>; $$ <span class="kw">LANGUAGE</span> plpgsql;
+</pre>
+<div class="sub">💻 IF / ELSIF / ELSE</div>
+<pre>
+<span class="kw">CREATE OR REPLACE FUNCTION</span> narx_daraja(p_id <span class="typ">INT</span>) <span class="kw">RETURNS</span> <span class="typ">TEXT</span> <span class="kw">AS</span> $$
+<span class="kw">DECLARE</span> v_price <span class="typ">NUMERIC</span>;
+<span class="kw">BEGIN</span>
+    <span class="kw">SELECT</span> price <span class="kw">INTO</span> v_price <span class="kw">FROM</span> product <span class="kw">WHERE</span> id = p_id;
+    <span class="kw">IF NOT FOUND THEN RETURN</span> <span class="str">'Topilmadi'</span>;
+    <span class="kw">ELSIF</span> v_price > <span class="num">10000000</span> <span class="kw">THEN RETURN</span> <span class="str">'Premium'</span>;
+    <span class="kw">ELSIF</span> v_price > <span class="num">1000000</span>  <span class="kw">THEN RETURN</span> <span class="str">'O''rtacha'</span>;
+    <span class="kw">ELSE RETURN</span> <span class="str">'Byudjet'</span>;
+    <span class="kw">END IF</span>;
+<span class="kw">END</span>; $$ <span class="kw">LANGUAGE</span> plpgsql;
+<span class="kw">SELECT</span> narx_daraja(<span class="num">1</span>), narx_daraja(<span class="num">3</span>), narx_daraja(<span class="num">999</span>);
+</pre>
+<div class="r"><table><thead><tr><th>id=1</th><th>id=3</th><th>id=999</th></tr></thead><tbody>
+<tr><td class="h">Premium</td><td class="h">Byudjet</td><td class="h">Topilmadi</td></tr>
+</tbody></table></div>
+<div class="sub">💻 FOR LOOP + RETURN TABLE</div>
+<pre>
+<span class="kw">CREATE OR REPLACE FUNCTION</span> mahsulot_royxati()
+<span class="kw">RETURNS TABLE</span>(nomi <span class="typ">TEXT</span>, narxi <span class="typ">NUMERIC</span>) <span class="kw">AS</span> $$
+<span class="kw">DECLARE</span> rec <span class="kw">RECORD</span>;
+<span class="kw">BEGIN</span>
+    <span class="kw">FOR</span> rec <span class="kw">IN SELECT</span> title, price <span class="kw">FROM</span> product <span class="kw">ORDER BY</span> price <span class="kw">DESC LOOP</span>
+        nomi := rec.title; narxi := rec.price;
+        <span class="kw">RETURN NEXT</span>;                              <span class="cm">◄--- Har qator qaytariladi</span>
+    <span class="kw">END LOOP</span>;
+<span class="kw">END</span>; $$ <span class="kw">LANGUAGE</span> plpgsql;
+</pre>
+<div class="sub">💻 EXCEPTION + RAISE</div>
+<pre>
+<span class="kw">CREATE OR REPLACE FUNCTION</span> xavfsiz_insert(p_title <span class="typ">TEXT</span>) <span class="kw">RETURNS</span> <span class="typ">TEXT</span> <span class="kw">AS</span> $$
+<span class="kw">BEGIN</span>
+    <span class="kw">INSERT INTO</span> product(category_id,title,price) <span class="kw">VALUES</span>(<span class="num">1</span>,p_title,<span class="num">0</span>);
+    <span class="kw">RETURN</span> <span class="str">'OK'</span>;
+<span class="kw">EXCEPTION</span>
+    <span class="kw">WHEN</span> unique_violation <span class="kw">THEN RETURN</span> <span class="str">'Mavjud!'</span>;
+    <span class="kw">WHEN OTHERS THEN</span>
+        <span class="kw">RAISE WARNING</span> <span class="str">'Xatolik: %'</span>, SQLERRM;       <span class="cm">◄--- Logga yozish</span>
+        <span class="kw">RETURN</span> <span class="str">'Xatolik!'</span>;
+<span class="kw">END</span>; $$ <span class="kw">LANGUAGE</span> plpgsql;
+</pre>
+<pre><span class="kw">DROP FUNCTION IF EXISTS</span> test_vars(), narx_daraja(<span class="typ">INT</span>), mahsulot_royxati(), xavfsiz_insert(<span class="typ">TEXT</span>);</pre>
+<div class="r"><table><thead><tr><th>Kalit so'z</th><th>Vazifasi</th></tr></thead><tbody>
+<tr><td class="h">DECLARE</td><td>O'zgaruvchilar e'lon qilish</td></tr>
+<tr><td class="h">%ROWTYPE / %TYPE</td><td>Jadval/ustun turi</td></tr>
+<tr><td class="h">IF / ELSIF / ELSE</td><td>Shartli mantiq</td></tr>
+<tr><td class="h">FOR...IN...LOOP</td><td>So'rov bo'yicha sikl</td></tr>
+<tr><td class="h">RETURN NEXT</td><td>Jadval qaytarish</td></tr>
+<tr><td class="h">EXCEPTION WHEN</td><td>Xatolikni ushlash</td></tr>
+<tr><td class="h">RAISE</td><td>Xabar/xatolik chiqarish</td></tr>
+<tr><td class="h">NOT FOUND</td><td>SELECT INTO qator topmadi</td></tr>
+</tbody></table></div>
+</div><div class="sep"></div>
+
+<div class="ch" id="c79"><div class="ch-n">79-Bob — Senior</div><div class="ch-t">🟢 Advanced Partitioning (Hash & Sub-Partitioning)</div>
+<div class="d">🧠 61-bobda RANGE va LIST ko'rildi. Bu bobda <b>Hash partitioning, sub-partitioning, partition management</b> o'rganiladi.</div>
+<div class="sub">💻 Hash Partitioning</div>
+<pre>
+<span class="kw">CREATE TABLE</span> logs (id <span class="typ">BIGSERIAL</span>, msg <span class="typ">TEXT</span>, created <span class="typ">TIMESTAMP</span> <span class="kw">DEFAULT NOW</span>())
+  <span class="kw">PARTITION BY HASH</span> (id);
+<span class="kw">CREATE TABLE</span> logs_p0 <span class="kw">PARTITION OF</span> logs <span class="kw">FOR VALUES WITH</span> (MODULUS <span class="num">4</span>, REMAINDER <span class="num">0</span>);
+<span class="kw">CREATE TABLE</span> logs_p1 <span class="kw">PARTITION OF</span> logs <span class="kw">FOR VALUES WITH</span> (MODULUS <span class="num">4</span>, REMAINDER <span class="num">1</span>);
+<span class="kw">CREATE TABLE</span> logs_p2 <span class="kw">PARTITION OF</span> logs <span class="kw">FOR VALUES WITH</span> (MODULUS <span class="num">4</span>, REMAINDER <span class="num">2</span>);
+<span class="kw">CREATE TABLE</span> logs_p3 <span class="kw">PARTITION OF</span> logs <span class="kw">FOR VALUES WITH</span> (MODULUS <span class="num">4</span>, REMAINDER <span class="num">3</span>);
+</pre>
+<div class="sub">💻 Sub-Partitioning</div>
+<pre>
+<span class="kw">CREATE TABLE</span> big_orders (id <span class="typ">SERIAL</span>, region <span class="typ">TEXT</span>, total <span class="typ">NUMERIC</span>, created <span class="typ">DATE</span>)
+  <span class="kw">PARTITION BY RANGE</span> (created);
+<span class="kw">CREATE TABLE</span> big_orders_2025 <span class="kw">PARTITION OF</span> big_orders
+  <span class="kw">FOR VALUES FROM</span> (<span class="str">'2025-01-01'</span>) <span class="kw">TO</span> (<span class="str">'2026-01-01'</span>)
+  <span class="kw">PARTITION BY LIST</span> (region);
+<span class="kw">CREATE TABLE</span> big_orders_2025_uz <span class="kw">PARTITION OF</span> big_orders_2025 <span class="kw">FOR VALUES IN</span> (<span class="str">'UZ'</span>);
+<span class="kw">CREATE TABLE</span> big_orders_2025_kz <span class="kw">PARTITION OF</span> big_orders_2025 <span class="kw">FOR VALUES IN</span> (<span class="str">'KZ'</span>);
+</pre>
+<div class="sub">💻 Partition boshqarish</div>
+<pre>
+<span class="kw">ALTER TABLE</span> big_orders <span class="kw">DETACH PARTITION</span> big_orders_2025_kz;
+<span class="kw">DROP TABLE</span> big_orders_2025_kz;                                <span class="cm">◄--- Tez o'chirish</span>
+</pre>
+<pre><span class="kw">DROP TABLE</span> logs, big_orders <span class="kw">CASCADE</span>;</pre>
+<div class="r"><table><thead><tr><th>Turi</th><th>Qachon</th></tr></thead><tbody>
+<tr><td class="h">RANGE</td><td>Sana, raqam oralig'i</td></tr>
+<tr><td class="h">LIST</td><td>Aniq qiymatlar</td></tr>
+<tr><td class="h">HASH</td><td>Teng taqsimlash</td></tr>
+<tr><td class="h">Sub-partition</td><td>2 darajali bo'lish</td></tr>
+</tbody></table></div>
+<div class="i g">💡 Partitioning 10+ million qatorli jadvallar uchun samarali!</div>
+</div><div class="sep"></div>
+
+<div class="ch" id="c80"><div class="ch-n">80-Bob — Senior</div><div class="ch-t">🟢 Point-in-Time Recovery (PITR)</div>
+<div class="d">🧠 pg_dump faqat zaxira vaqtidagi holatni saqlaydi. PITR istalgan vaqt nuqtasiga tiklash imkonini beradi!</div>
+<pre>
+<span class="cm">-- WAL (Write-Ahead Log) = har bir o'zgarish qayd etiladi</span>
+<span class="cm">-- PITR = WAL fayllarni qayta ijro etish (replay)</span>
+<span class="cm">-- 1. WAL arxivlash (postgresql.conf): wal_level=replica, archive_mode=on</span>
+<span class="cm">-- 2. Bazaviy zaxira:</span>
+pg_basebackup -D /backup/base -Fp -Xs -P
+<span class="cm">-- 3. Tiklash: recovery_target_time='2025-06-15 14:29:00'</span>
+</pre>
+<div class="r"><table><thead><tr><th>Usul</th><th>Natija</th></tr></thead><tbody>
+<tr><td class="h">pg_dump</td><td>Zaxira vaqtidagi holat</td></tr>
+<tr><td class="h">PITR</td><td>Istalgan vaqt nuqtasiga</td></tr>
+<tr><td class="h">Replication</td><td>Real-time nusxa</td></tr>
+</tbody></table></div>
+<div class="i w">⚠️ PITR faqat WAL arxivlash YOQILGAN bo'lsa ishlaydi!</div>
+</div><div class="sep"></div>
+
+<div class="ch" id="c81"><div class="ch-n">81-Bob — Senior</div><div class="ch-t">🟢 Replication & High Availability</div>
+<div class="d">🧠 1 server yetmaydi: ko'p foydalanuvchi = sekin, server buzilsa = hamma to'xtaydi. Replikatsiya = bir nechta server nusxasi.</div>
+<div class="sub">💻 Streaming Replication</div>
+<pre>
+<span class="cm">-- PRIMARY → yozish + o'qish | REPLICA → faqat o'qish</span>
+<span class="cm">-- PRIMARY: wal_level=replica, max_wal_senders=5</span>
+pg_basebackup -h primary_ip -D /data -U replica_user -P -Xs -R
+<span class="cm">-- Tekshirish:</span>
+<span class="kw">SELECT</span> client_addr, state <span class="kw">FROM</span> pg_stat_replication;   <span class="cm">◄--- PRIMARY da</span>
+<span class="kw">SELECT</span> pg_is_in_recovery();                           <span class="cm">◄--- REPLICA da (true)</span>
+</pre>
+<div class="sub">💻 Read Replica + Failover</div>
+<pre>
+<span class="cm">-- Dasturda: INSERT/UPDATE → PRIMARY | SELECT → REPLICA</span>
+<span class="cm">-- Failover:</span>
+pg_ctl promote -D /data                            <span class="cm">◄--- REPLICA → PRIMARY</span>
+<span class="cm">-- Avtomatik: Patroni, pgpool-II, HAProxy</span>
+</pre>
+<div class="r"><table><thead><tr><th>Tushuncha</th><th>Ma'nosi</th></tr></thead><tbody>
+<tr><td class="h">Primary</td><td>Asosiy (yozish + o'qish)</td></tr>
+<tr><td class="h">Replica</td><td>Nusxa (faqat o'qish)</td></tr>
+<tr><td class="h">Failover</td><td>Primary buzilsa → replica oladi</td></tr>
+</tbody></table></div>
+<div class="i g">💼 <b>Production SHART:</b> 1) Kunlik pg_dump 2) WAL arxivlash 3) Kamida 1 replica</div>
+</div><div class="sep"></div>
+
+<div class="ch" id="c82"><div class="ch-n">82-Bob — Senior</div><div class="ch-t">🟢 Generated Columns — Avtomatik Hisoblangan Ustunlar</div>
+<div class="d">🧠 Ustun qiymati boshqa ustunlardan avtomatik hisoblanadi. Alohida UPDATE kerak emas!</div>
+<pre>
+<span class="kw">CREATE TABLE</span> items (id <span class="typ">SERIAL PRIMARY KEY</span>, price <span class="typ">NUMERIC NOT NULL</span>, qty <span class="typ">INT NOT NULL</span>,
+    total <span class="typ">NUMERIC</span> <span class="kw">GENERATED ALWAYS AS</span> (price * qty) <span class="kw">STORED</span>);
+<span class="kw">INSERT INTO</span> items(price, qty) <span class="kw">VALUES</span>(<span class="num">50000</span>, <span class="num">3</span>);
+<span class="kw">SELECT</span> * <span class="kw">FROM</span> items;
+</pre>
+<div class="r"><table><thead><tr><th>id</th><th>price</th><th>qty</th><th class="h">total</th></tr></thead><tbody>
+<tr><td>1</td><td>50000</td><td>3</td><td class="h">150000 ← avtomatik!</td></tr>
+</tbody></table></div>
+<pre>
+<span class="kw">CREATE TABLE</span> people (first_name <span class="typ">TEXT</span>, last_name <span class="typ">TEXT</span>,
+    full_name <span class="typ">TEXT</span> <span class="kw">GENERATED ALWAYS AS</span> (first_name || <span class="str">' '</span> || last_name) <span class="kw">STORED</span>);
+</pre>
+<pre><span class="kw">DROP TABLE</span> items, people;</pre>
+<div class="i w">⚠️ Generated ustunni to'g'ridan-to'g'ri o'zgartirish mumkin EMAS!</div>
+</div><div class="sep"></div>
+
+<div class="ch" id="c83"><div class="ch-n">83-Bob — Senior</div><div class="ch-t">🟢 Row Level Security (RLS)</div>
+<div class="d">🧠 Har bir foydalanuvchi faqat O'ZIGA tegishli qatorlarni ko'radi. Multi-tenant SaaS uchun!</div>
+<pre>
+<span class="kw">CREATE TABLE</span> documents (id <span class="typ">SERIAL</span>, owner <span class="typ">TEXT</span>, content <span class="typ">TEXT</span>);
+<span class="kw">INSERT INTO</span> documents(owner,content) <span class="kw">VALUES</span>(<span class="str">'ali'</span>,<span class="str">'Ali hujjati'</span>),(<span class="str">'vali'</span>,<span class="str">'Vali hujjati'</span>);
+<span class="kw">ALTER TABLE</span> documents <span class="kw">ENABLE ROW LEVEL SECURITY</span>;
+<span class="kw">CREATE POLICY</span> own_docs <span class="kw">ON</span> documents <span class="kw">USING</span> (owner = <span class="fn">CURRENT_USER</span>);
+<span class="cm">-- ali sifatida SELECT → faqat 1 ta qator ko'radi!</span>
+</pre>
+<pre>
+<span class="kw">CREATE POLICY</span> read_own <span class="kw">ON</span> documents <span class="kw">FOR SELECT USING</span> (owner = <span class="fn">CURRENT_USER</span>);
+<span class="kw">CREATE POLICY</span> write_own <span class="kw">ON</span> documents <span class="kw">FOR INSERT WITH CHECK</span> (owner = <span class="fn">CURRENT_USER</span>);
+<span class="kw">DROP POLICY</span> own_docs <span class="kw">ON</span> documents;
+<span class="kw">ALTER TABLE</span> documents <span class="kw">DISABLE ROW LEVEL SECURITY</span>;
+</pre>
+<pre><span class="kw">DROP TABLE</span> documents;</pre>
+</div><div class="sep"></div>
+
+<div class="ch" id="c84"><div class="ch-n">84-Bob — Senior</div><div class="ch-t">🟢 LISTEN / NOTIFY — Real-time Xabarnoma</div>
+<div class="d">🧠 PostgreSQL ichida real-time xabar almashish. Polling kerak emas!</div>
+<pre>
+<span class="cm">-- 1-TERMINAL (tinglovchi):</span>
+<span class="kw">LISTEN</span> new_order;
+<span class="cm">-- ... kutmoqda ... → Notification received: "order_id=42"</span>
+
+<span class="cm">-- 2-TERMINAL (yuboruvchi):</span>
+<span class="kw">NOTIFY</span> new_order, <span class="str">'order_id=42'</span>;
+<span class="cm">-- yoki:</span>
+<span class="kw">SELECT</span> pg_notify(<span class="str">'new_order'</span>, <span class="str">'{"id":42}'</span>);
+</pre>
+<div class="sub">💻 Trigger bilan avtomatik NOTIFY</div>
+<pre>
+<span class="kw">CREATE OR REPLACE FUNCTION</span> notify_order() <span class="kw">RETURNS TRIGGER AS</span> $$
+<span class="kw">BEGIN</span>
+    <span class="kw">PERFORM</span> pg_notify(<span class="str">'new_order'</span>, <span class="fn">ROW_TO_JSON</span>(NEW)::<span class="typ">TEXT</span>);
+    <span class="kw">RETURN</span> NEW;
+<span class="kw">END</span>; $$ <span class="kw">LANGUAGE</span> plpgsql;
+</pre>
+<pre><span class="kw">UNLISTEN</span> *;                                      <span class="cm">◄--- Barcha kanallarni to'xtatish</span></pre>
+<div class="i g">💼 Chat, real-time dashboard, buyurtma monitoring, kesh invalidation.</div>
+</div><div class="sep"></div>
+
+<div class="ch" id="c85"><div class="ch-n">85-Bob — Senior</div><div class="ch-t">🟢 Cursors — Katta Ma'lumotni Qatorma-Qator O'qish</div>
+<div class="d">🧠 SELECT butun natijani xotiraga yuklaydi. Cursor = qatorma-qator o'qish (xotira tejash).</div>
+<pre>
+<span class="kw">BEGIN</span>;
+  <span class="kw">DECLARE</span> cur <span class="kw">CURSOR FOR SELECT</span> * <span class="kw">FROM</span> product <span class="kw">ORDER BY</span> id;
+  <span class="kw">FETCH NEXT FROM</span> cur;                            <span class="cm">◄--- 1 ta qator</span>
+  <span class="kw">FETCH</span> <span class="num">3</span> <span class="kw">FROM</span> cur;                               <span class="cm">◄--- 3 ta qator</span>
+  <span class="kw">FETCH ALL FROM</span> cur;                              <span class="cm">◄--- Qolganlar</span>
+  <span class="kw">CLOSE</span> cur;
+<span class="kw">COMMIT</span>;
+</pre>
+<div class="i g">💼 ETL, batch processing, xotira chegaralangan muhitlarda.</div>
+</div><div class="sep"></div>
+
+<div class="ch" id="c86"><div class="ch-n">86-Bob — Senior</div><div class="ch-t">🟢 Table Inheritance</div>
+<div class="d">🧠 Bola jadval ota jadvalning ustunlarini meros oladi. PostgreSQL maxsus xususiyati!</div>
+<pre>
+<span class="kw">CREATE TABLE</span> vehicles (id <span class="typ">SERIAL PRIMARY KEY</span>, brand <span class="typ">TEXT</span>, year <span class="typ">INT</span>);
+<span class="kw">CREATE TABLE</span> cars    (<span class="kw">INHERITS</span> (vehicles), doors <span class="typ">INT</span>);
+<span class="kw">CREATE TABLE</span> trucks  (<span class="kw">INHERITS</span> (vehicles), payload <span class="typ">NUMERIC</span>);
+
+<span class="kw">INSERT INTO</span> cars(brand,year,doors) <span class="kw">VALUES</span>(<span class="str">'Toyota'</span>,<span class="num">2024</span>,<span class="num">4</span>);
+<span class="kw">INSERT INTO</span> trucks(brand,year,payload) <span class="kw">VALUES</span>(<span class="str">'MAN'</span>,<span class="num">2023</span>,<span class="num">20000</span>);
+
+<span class="kw">SELECT</span> * <span class="kw">FROM</span> vehicles;               <span class="cm">◄--- BARCHA: cars + trucks</span>
+<span class="kw">SELECT</span> * <span class="kw">FROM ONLY</span> vehicles;          <span class="cm">◄--- Faqat vehicles o'zi</span>
+</pre>
+<pre><span class="kw">DROP TABLE</span> cars, trucks, vehicles;</pre>
+<div class="i w">⚠️ Partitioning ko'pchilik holatda yaxshiroq alternativa!</div>
+</div><div class="sep"></div>
+
+<div class="ch" id="c87"><div class="ch-n">87-Bob — Senior</div><div class="ch-t">🟢 Domain Types — Maxsus Ma'lumot Turlari</div>
+<div class="d">🧠 Mavjud turga cheklov qo'shib yangi tur yaratish. Bir joyda aniqlaysiz — barcha jadvallarda!</div>
+<pre>
+<span class="kw">CREATE DOMAIN</span> email_type <span class="kw">AS</span> <span class="typ">TEXT</span>
+  <span class="kw">CHECK</span> (VALUE ~ <span class="str">'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'</span>);
+<span class="kw">CREATE DOMAIN</span> positive_int <span class="kw">AS</span> <span class="typ">INTEGER</span> <span class="kw">CHECK</span> (VALUE > <span class="num">0</span>);
+<span class="kw">CREATE DOMAIN</span> phone_uz <span class="kw">AS</span> <span class="typ">TEXT</span> <span class="kw">CHECK</span> (VALUE ~ <span class="str">'^[+]998[0-9]{9}$'</span>);
+
+<span class="kw">CREATE TABLE</span> contacts (id <span class="typ">SERIAL PRIMARY KEY</span>,
+    email email_type, phone phone_uz, age positive_int);
+<span class="kw">INSERT INTO</span> contacts(email,phone,age) <span class="kw">VALUES</span>(<span class="str">'ali@mail.com'</span>,<span class="str">'+998901234567'</span>,<span class="num">25</span>); <span class="cm">✅</span>
+<span class="cm">-- INSERT INTO contacts(email,...) VALUES('xato',...); ❌ CHECK buziladi!</span>
+</pre>
+<pre><span class="kw">DROP TABLE</span> contacts; <span class="kw">DROP DOMAIN</span> email_type, positive_int, phone_uz;</pre>
+</div><div class="sep"></div>
+
+<div class="ch" id="c88"><div class="ch-n">88-Bob — Senior</div><div class="ch-t">🟢 Extensions — Kengaytmalar</div>
+<div class="d">🧠 PostgreSQL ga qo'shimcha funksionallik qo'shish.</div>
+<pre>
+<span class="kw">SELECT</span> * <span class="kw">FROM</span> pg_available_extensions <span class="kw">ORDER BY</span> name;  <span class="cm">◄--- Mavjudlar</span>
+<span class="kw">SELECT</span> * <span class="kw">FROM</span> pg_extension;                           <span class="cm">◄--- O'rnatilganlar</span>
+</pre>
+<div class="sub">💻 Eng muhimlar</div>
+<pre>
+<span class="kw">CREATE EXTENSION</span> pg_stat_statements;               <span class="cm">◄--- Sekin so'rovlar monitoring</span>
+<span class="kw">CREATE EXTENSION</span> pg_trgm;                          <span class="cm">◄--- Fuzzy search (o'xshash matn)</span>
+<span class="kw">CREATE EXTENSION</span> <span class="str">"uuid-ossp"</span>;                      <span class="cm">◄--- UUID generatsiya</span>
+<span class="kw">CREATE EXTENSION</span> citext;                           <span class="cm">◄--- Case-insensitive text</span>
+<span class="cm">-- PostGIS (geo-spatial), pgcrypto (shifrlash), hstore (key-value)</span>
+</pre>
+<div class="r"><table><thead><tr><th>Extension</th><th>Vazifasi</th></tr></thead><tbody>
+<tr><td class="h">pg_stat_statements</td><td>So'rov monitoring</td></tr>
+<tr><td class="h">pg_trgm</td><td>Fuzzy matn qidirish</td></tr>
+<tr><td class="h">uuid-ossp</td><td>UUID generatsiya</td></tr>
+<tr><td class="h">citext</td><td>Case-insensitive text</td></tr>
+<tr><td class="h">postgis</td><td>Geo-spatial</td></tr>
+<tr><td class="h">pgcrypto</td><td>Shifrlash</td></tr>
+</tbody></table></div>
+</div><div class="sep"></div>
+
+<div class="ch" id="c89"><div class="ch-n">89-Bob — Senior</div><div class="ch-t">🟢 Foreign Data Wrappers (FDW)</div>
+<div class="d">🧠 Boshqa PostgreSQL server, MySQL, CSV fayldan ma'lumotni oddiy jadval kabi o'qish!</div>
+<pre>
+<span class="kw">CREATE EXTENSION</span> postgres_fdw;
+<span class="kw">CREATE SERVER</span> remote_db <span class="kw">FOREIGN DATA WRAPPER</span> postgres_fdw
+  <span class="kw">OPTIONS</span> (host <span class="str">'192.168.1.100'</span>, dbname <span class="str">'shop'</span>, port <span class="str">'5432'</span>);
+<span class="kw">CREATE USER MAPPING FOR</span> <span class="fn">CURRENT_USER</span> <span class="kw">SERVER</span> remote_db
+  <span class="kw">OPTIONS</span> (user <span class="str">'reader'</span>, password <span class="str">'secret'</span>);
+<span class="kw">CREATE FOREIGN TABLE</span> remote_products (id <span class="typ">INT</span>, title <span class="typ">TEXT</span>, price <span class="typ">NUMERIC</span>)
+  <span class="kw">SERVER</span> remote_db <span class="kw">OPTIONS</span> (table_name <span class="str">'product'</span>);
+<span class="kw">SELECT</span> * <span class="kw">FROM</span> remote_products;                   <span class="cm">◄--- Xuddi lokal jadval!</span>
+</pre>
+<div class="i g">💼 Microservice arxitektura — database lar orasida ma'lumot almashish.</div>
+</div><div class="sep"></div>
+
+<div class="ch" id="c90"><div class="ch-n">90-Bob — Senior</div><div class="ch-t">🟢 Connection Pooling (PgBouncer)</div>
+<div class="d">🧠 Har ulanish ~5-10MB xotira. 1000 foydalanuvchi = 10GB! Connection pooler ulanishlarni qayta ishlatadi.</div>
+<pre>
+<span class="cm">-- Dastur → PgBouncer (100 ulanish) → PostgreSQL (20 ulanish)</span>
+<span class="cm">-- pgbouncer.ini:</span>
+<span class="cm">-- pool_mode = transaction      ← Eng ko'p ishlatiladi</span>
+<span class="cm">-- max_client_conn = 1000</span>
+<span class="cm">-- default_pool_size = 20</span>
+</pre>
+<div class="r"><table><thead><tr><th>Rejim</th><th>Ma'nosi</th></tr></thead><tbody>
+<tr><td class="h">session</td><td>Session davomida</td></tr>
+<tr><td class="h">transaction</td><td>TX davomida (tavsiya!)</td></tr>
+<tr><td class="h">statement</td><td>1 ta so'rov uchun</td></tr>
+</tbody></table></div>
+<div class="i g">💼 Production SHART — pooler yo'q = ko'p foydalanuvchida server yiqiladi!</div>
+</div><div class="sep"></div>
+
+<div class="ch" id="c91"><div class="ch-n">91-Bob — Senior</div><div class="ch-t">🟢 MERGE — INSERT + UPDATE + DELETE birga (PG 15+)</div>
+<div class="d">🧠 SQL standart MERGE — UPSERT (ON CONFLICT) dan kuchliroq!</div>
+<pre>
+<span class="kw">MERGE INTO</span> product <span class="kw">AS</span> target
+<span class="kw">USING</span> (<span class="kw">VALUES</span> (<span class="num">1</span>,<span class="str">'iPhone 17'</span>,<span class="num">20000000</span>),(<span class="num">99</span>,<span class="str">'Yangi'</span>,<span class="num">100000</span>))
+  <span class="kw">AS</span> source(id, title, price)
+<span class="kw">ON</span> target.id = source.id
+<span class="kw">WHEN MATCHED THEN</span>
+    <span class="kw">UPDATE SET</span> title = source.title, price = source.price
+<span class="kw">WHEN NOT MATCHED THEN</span>
+    <span class="kw">INSERT</span>(id, category_id, title, price) <span class="kw">VALUES</span>(source.id, <span class="num">1</span>, source.title, source.price);
+</pre>
+</div><div class="sep"></div>
+
+<div class="ch" id="c92"><div class="ch-n">92-Bob — Senior</div><div class="ch-t">🟢 Advisory Locks — Dastur Darajasida Qulflash</div>
+<div class="d">🧠 Jadval qatori emas, <b>ixtiyoriy raqam</b> ni qulflash. Dastur mantiqini boshqarish uchun.</div>
+<pre>
+<span class="kw">SELECT</span> pg_advisory_lock(<span class="num">12345</span>);                   <span class="cm">◄--- Qulflash</span>
+<span class="cm">-- ... biror ish ...</span>
+<span class="kw">SELECT</span> pg_advisory_unlock(<span class="num">12345</span>);                 <span class="cm">◄--- Ochish</span>
+
+<span class="kw">SELECT</span> pg_try_advisory_lock(<span class="num">12345</span>);               <span class="cm">◄--- true/false (kutmaydi!)</span>
+
+<span class="kw">BEGIN</span>;
+  <span class="kw">SELECT</span> pg_advisory_xact_lock(<span class="num">12345</span>);             <span class="cm">◄--- TX ichida (avtomatik ochiladi)</span>
+<span class="kw">COMMIT</span>;
+</pre>
+<div class="i g">💼 Cron job — faqat 1 instance. Hisobot — bir vaqtda 1 ta.</div>
+</div><div class="sep"></div>
+
+<div class="ch" id="c93"><div class="ch-n">93-Bob — Senior</div><div class="ch-t">🟢 Logical Replication</div>
+<div class="d">🧠 Streaming replication BUTUN database. Logical replication faqat TANLANGAN jadvallar!</div>
+<pre>
+<span class="cm">-- PUBLISHER:</span>
+<span class="kw">CREATE PUBLICATION</span> my_pub <span class="kw">FOR TABLE</span> product, category;
+<span class="cm">-- SUBSCRIBER:</span>
+<span class="kw">CREATE SUBSCRIPTION</span> my_sub
+  <span class="kw">CONNECTION</span> <span class="str">'host=pub_ip dbname=mydb user=repl password=secret'</span>
+  <span class="kw">PUBLICATION</span> my_pub;
+</pre>
+<div class="r"><table><thead><tr><th>Streaming</th><th>Logical</th></tr></thead><tbody>
+<tr><td>Butun database</td><td>Tanlangan jadvallar</td></tr>
+<tr><td>Replica = read-only</td><td>Subscriber = read-write!</td></tr>
+<tr><td>Bir xil versiya</td><td>Turli versiyalar mumkin</td></tr>
+</tbody></table></div>
+</div><div class="sep"></div>
+
+<div class="ch" id="c94"><div class="ch-n">94-Bob — Senior</div><div class="ch-t">🟢 pg_stat — Monitoring va Diagnostika</div>
+<div class="d">🧠 PostgreSQL ichida monitoring vositalari. Sekin so'rovlar, blokirovkalar, jadval hajmi.</div>
+<pre>
+<span class="cm">-- Jadval statistikasi:</span>
+<span class="kw">SELECT</span> relname, n_live_tup <span class="kw">AS</span> tirik, n_dead_tup <span class="kw">AS</span> olik, last_vacuum, last_analyze
+<span class="kw">FROM</span> pg_stat_user_tables;
+
+<span class="cm">-- Jadval hajmi:</span>
+<span class="kw">SELECT</span> tablename, <span class="fn">PG_SIZE_PRETTY</span>(<span class="fn">PG_TOTAL_RELATION_SIZE</span>(tablename::regclass)) <span class="kw">AS</span> hajm
+<span class="kw">FROM</span> pg_tables <span class="kw">WHERE</span> schemaname=<span class="str">'public'</span> <span class="kw">ORDER BY</span> <span class="fn">PG_TOTAL_RELATION_SIZE</span>(tablename::regclass) <span class="kw">DESC</span>;
+
+<span class="cm">-- Faol ulanishlar:</span>
+<span class="kw">SELECT</span> pid, state, query, <span class="fn">NOW</span>()-query_start <span class="kw">AS</span> davomiyligi
+<span class="kw">FROM</span> pg_stat_activity <span class="kw">WHERE</span> state=<span class="str">'active'</span>;
+
+<span class="cm">-- So'rovni o'ldirish:</span>
+<span class="kw">SELECT</span> pg_cancel_backend(<span class="num">12345</span>);                   <span class="cm">◄--- Yumshoq</span>
+<span class="kw">SELECT</span> pg_terminate_backend(<span class="num">12345</span>);                <span class="cm">◄--- Kuchli</span>
+
+<span class="cm">-- Ishlatilmagan indekslar:</span>
+<span class="kw">SELECT</span> indexrelname, idx_scan, <span class="fn">PG_SIZE_PRETTY</span>(pg_relation_size(indexrelid)) <span class="kw">AS</span> hajm
+<span class="kw">FROM</span> pg_stat_user_indexes <span class="kw">WHERE</span> idx_scan=<span class="num">0</span> <span class="kw">ORDER BY</span> pg_relation_size(indexrelid) <span class="kw">DESC</span>;
+</pre>
+<div class="r"><table><thead><tr><th>View</th><th>Nima ko'rsatadi</th></tr></thead><tbody>
+<tr><td class="h">pg_stat_activity</td><td>Hozirgi ulanishlar</td></tr>
+<tr><td class="h">pg_stat_user_tables</td><td>Jadval statistikasi</td></tr>
+<tr><td class="h">pg_stat_user_indexes</td><td>Indeks ishlatilishi</td></tr>
+<tr><td class="h">pg_stat_statements</td><td>So'rov statistikasi</td></tr>
+<tr><td class="h">pg_locks</td><td>Blokirovkalar</td></tr>
+</tbody></table></div>
+</div><div class="sep"></div>
+
+<div class="ch" id="c95"><div class="ch-n">95-Bob — Senior</div><div class="ch-t">🟢 Foydali System Funksiyalari</div>
+<div class="d">🧠 Tez-tez ishlatiladigan PostgreSQL funksiyalari.</div>
+<pre>
+<span class="kw">SELECT</span> <span class="fn">VERSION</span>();                                 <span class="cm">◄--- PG versiyasi</span>
+<span class="kw">SELECT</span> <span class="fn">CURRENT_USER</span>, <span class="fn">CURRENT_DATABASE</span>(), <span class="fn">CURRENT_SCHEMA</span>;
+<span class="kw">SELECT</span> <span class="fn">PG_SIZE_PRETTY</span>(<span class="fn">PG_DATABASE_SIZE</span>(<span class="str">'ecommerce'</span>));
+<span class="kw">SELECT</span> <span class="fn">PG_SIZE_PRETTY</span>(<span class="fn">PG_TOTAL_RELATION_SIZE</span>(<span class="str">'product'</span>));
+<span class="kw">SELECT</span> <span class="fn">TO_CHAR</span>(<span class="num">1234567</span>, <span class="str">'999,999,999'</span>);              <span class="cm">◄--- 1,234,567</span>
+<span class="kw">SELECT</span> <span class="fn">TO_CHAR</span>(<span class="fn">NOW</span>(), <span class="str">'DD.MM.YYYY HH24:MI:SS'</span>);
+<span class="kw">SELECT</span> <span class="fn">GENERATE_SERIES</span>(<span class="num">1</span>, <span class="num">5</span>);                           <span class="cm">◄--- 1,2,3,4,5</span>
+<span class="kw">SELECT</span> <span class="fn">GENERATE_SERIES</span>(<span class="str">'2026-01-01'</span>::<span class="typ">DATE</span>, <span class="str">'2026-01-07'</span>::<span class="typ">DATE</span>, <span class="str">'1 day'</span>::<span class="kw">INTERVAL</span>);
+<span class="kw">SELECT</span> <span class="fn">gen_random_uuid</span>();                            <span class="cm">◄--- UUID</span>
+<span class="kw">SELECT</span> <span class="fn">STRING_TO_ARRAY</span>(<span class="str">'a,b,c'</span>, <span class="str">','</span>);                  <span class="cm">◄--- {a,b,c}</span>
+<span class="kw">SELECT</span> <span class="fn">ARRAY_TO_STRING</span>(<span class="kw">ARRAY</span>[<span class="str">'a'</span>,<span class="str">'b'</span>,<span class="str">'c'</span>], <span class="str">'-'</span>);      <span class="cm">◄--- a-b-c</span>
+</pre>
+</div><div class="sep"></div>
+
+<div class="ch" id="c96"><div class="ch-n">96-Bob — Senior</div><div class="ch-t">🟢 Xavfsizlik Best Practices</div>
+<div class="d">🧠 Production serverda xavfsizlik qoidalari.</div>
+<pre>
+<span class="cm">-- 1. Superuser ishlatmang!</span>
+<span class="kw">CREATE ROLE</span> app_user <span class="kw">WITH LOGIN PASSWORD</span> <span class="str">'kuchli_parol'</span>;
+<span class="kw">GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA</span> public <span class="kw">TO</span> app_user;
+<span class="cm">-- 2. SSL yoqing: postgresql.conf → ssl = on</span>
+<span class="cm">-- 3. pg_hba.conf da IP chegaralang</span>
+<span class="cm">-- 4. Prepared statements (SQL injection himoya)</span>
+<span class="cm">-- 5. Row Level Security (83-bob)</span>
+<span class="cm">-- 6. Audit log jadval yaratish</span>
+</pre>
+</div><div class="sep"></div>
+
+<div class="ch" id="c97"><div class="ch-n">97-Bob — Senior</div><div class="ch-t">🟢 Schema Design Patterns</div>
+<div class="d">🧠 Tez-tez uchraydigan jadval loyihalash patternlari.</div>
+<pre>
+<span class="cm">-- 1. Base Model:</span>
+<span class="kw">CREATE TABLE</span> base_example (id <span class="typ">BIGSERIAL PRIMARY KEY</span>,
+    created_at <span class="typ">TIMESTAMPTZ</span> <span class="kw">DEFAULT NOW</span>() <span class="kw">NOT NULL</span>,
+    updated_at <span class="typ">TIMESTAMPTZ</span> <span class="kw">DEFAULT NOW</span>() <span class="kw">NOT NULL</span>,
+    deleted_at <span class="typ">TIMESTAMPTZ</span>);                        <span class="cm">◄--- Soft delete</span>
+
+<span class="cm">-- 2. Audit Log:</span>
+<span class="kw">CREATE TABLE</span> audit_log (id <span class="typ">BIGSERIAL PRIMARY KEY</span>,
+    table_name <span class="typ">TEXT</span>, action <span class="typ">TEXT</span>, old_data <span class="typ">JSONB</span>, new_data <span class="typ">JSONB</span>,
+    changed_by <span class="typ">TEXT</span> <span class="kw">DEFAULT</span> <span class="fn">CURRENT_USER</span>,
+    changed_at <span class="typ">TIMESTAMPTZ</span> <span class="kw">DEFAULT NOW</span>());
+
+<span class="cm">-- 3. Polymorphic comments:</span>
+<span class="kw">CREATE TABLE</span> comments (id <span class="typ">BIGSERIAL PRIMARY KEY</span>,
+    entity_type <span class="typ">TEXT NOT NULL</span>, entity_id <span class="typ">BIGINT NOT NULL</span>, body <span class="typ">TEXT</span>);
+<span class="kw">CREATE INDEX</span> idx_comments <span class="kw">ON</span> comments(entity_type, entity_id);
+</pre>
+<pre><span class="kw">DROP TABLE IF EXISTS</span> base_example, audit_log, comments;</pre>
+</div><div class="sep"></div>
+
+<div class="ch" id="c98"><div class="ch-n">98-Bob — Senior</div><div class="ch-t">🟢 Migration & Versioning</div>
+<div class="d">🧠 Database strukturasini xavfsiz o'zgartirish.</div>
+<pre>
+<span class="cm">-- Xavfsiz ustun qo'shish (katta jadvalda):</span>
+<span class="kw">ALTER TABLE</span> product <span class="kw">ADD COLUMN</span> description <span class="typ">TEXT</span>;  <span class="cm">◄--- TEZ (NULL, default yo'q)</span>
+
+<span class="cm">-- Xavfsiz indeks (jadval qulflanmaydi):</span>
+<span class="kw">CREATE INDEX CONCURRENTLY</span> idx <span class="kw">ON</span> product(price);
+
+<span class="cm">-- Migration vositalari: Flyway, Alembic, Prisma, dbmate</span>
+</pre>
+<pre><span class="kw">ALTER TABLE</span> product <span class="kw">DROP COLUMN IF EXISTS</span> description;</pre>
+</div><div class="sep"></div>
+
+<div class="ch" id="c99"><div class="ch-n">99-Bob — Senior</div><div class="ch-t">🟢 psql Tips & Tricks</div>
+<div class="d">🧠 psql da ishni tezlashtiruvchi qo'shimcha buyruqlar.</div>
+<pre>
+<span class="kw">\timing</span> on                                       <span class="cm">◄--- So'rov vaqtini ko'rsat</span>
+<span class="kw">\x</span> auto                                          <span class="cm">◄--- Kengaytirilgan ko'rinish</span>
+<span class="kw">\dt+</span>                                              <span class="cm">◄--- Jadvallar + hajmi</span>
+<span class="kw">\di+</span>                                              <span class="cm">◄--- Indekslar + hajmi</span>
+<span class="kw">\o</span> /tmp/result.txt                                <span class="cm">◄--- Natijani faylga</span>
+<span class="kw">\i</span> /path/to/script.sql                            <span class="cm">◄--- SQL faylni ishga tushirish</span>
+<span class="kw">\s</span>                                                <span class="cm">◄--- Tarix</span>
+<span class="kw">SELECT</span> <span class="fn">COUNT</span>(*) <span class="kw">FROM</span> product; <span class="kw">\watch</span> <span class="num">5</span>           <span class="cm">◄--- Har 5 soniyada qayta</span>
+</pre>
+</div><div class="sep"></div>
+
+<div class="ch" id="c100"><div class="ch-n">100-Bob — Senior</div><div class="ch-t">🟢 Production Checklist — Yakuniy Xulosa</div>
+<div class="d">🧠 Bu darslikni o'qigan odam 0 dan boshlab → senior PostgreSQL developer bo'lishi uchun barcha bilimlar jamlandi!</div>
+<div class="sub">🏗️ Database Design</div>
+<div class="r"><table><thead><tr><th>✅</th><th>Vazifa</th><th>Bob</th></tr></thead><tbody>
+<tr><td>☐</td><td class="h">3NF ga normalizatsiya</td><td>70</td></tr>
+<tr><td>☐</td><td class="h">1:1, 1:N, N:M to'g'ri</td><td>72</td></tr>
+<tr><td>☐</td><td class="h">BIGSERIAL PRIMARY KEY</td><td>3</td></tr>
+<tr><td>☐</td><td class="h">created_at, updated_at TIMESTAMPTZ</td><td>97</td></tr>
+<tr><td>☐</td><td class="h">Soft delete (deleted_at)</td><td>97</td></tr>
+<tr><td>☐</td><td class="h">CHECK, NOT NULL, FK cheklovlari</td><td>6</td></tr>
+</tbody></table></div>
+<div class="sub">⚡ Performance</div>
+<div class="r"><table><thead><tr><th>✅</th><th>Vazifa</th><th>Bob</th></tr></thead><tbody>
+<tr><td>☐</td><td class="h">FK ustunlariga INDEX</td><td>46, 75</td></tr>
+<tr><td>☐</td><td class="h">EXPLAIN ANALYZE bilan tekshirish</td><td>73</td></tr>
+<tr><td>☐</td><td class="h">shared_buffers, work_mem sozlash</td><td>76</td></tr>
+<tr><td>☐</td><td class="h">Autovacuum yoqilgan</td><td>76</td></tr>
+<tr><td>☐</td><td class="h">pg_stat_statements yoqilgan</td><td>88, 94</td></tr>
+<tr><td>☐</td><td class="h">Katta jadvallar partitioned</td><td>61, 79</td></tr>
+<tr><td>☐</td><td class="h">Connection pooler (PgBouncer)</td><td>90</td></tr>
+</tbody></table></div>
+<div class="sub">🔒 Xavfsizlik</div>
+<div class="r"><table><thead><tr><th>✅</th><th>Vazifa</th><th>Bob</th></tr></thead><tbody>
+<tr><td>☐</td><td class="h">Superuser ishlatilMAYAPTI</td><td>52, 96</td></tr>
+<tr><td>☐</td><td class="h">SSL yoqilgan</td><td>96</td></tr>
+<tr><td>☐</td><td class="h">Prepared statements</td><td>96</td></tr>
+<tr><td>☐</td><td class="h">IP chegaralangan</td><td>96</td></tr>
+</tbody></table></div>
+<div class="sub">💾 Zaxira & Ishonchlilik</div>
+<div class="r"><table><thead><tr><th>✅</th><th>Vazifa</th><th>Bob</th></tr></thead><tbody>
+<tr><td>☐</td><td class="h">Kunlik pg_dump zaxira</td><td>62</td></tr>
+<tr><td>☐</td><td class="h">WAL arxivlash (PITR)</td><td>80</td></tr>
+<tr><td>☐</td><td class="h">Kamida 1 ta replica</td><td>81</td></tr>
+<tr><td>☐</td><td class="h">Failover mexanizmi (Patroni)</td><td>81</td></tr>
+<tr><td>☐</td><td class="h">Zaxiradan tiklash SINAB KO'RILGAN!</td><td>62</td></tr>
+</tbody></table></div>
+<div class="i g" style="font-size:.88rem;line-height:2">
+🎓 <b>Tabriklaymiz!</b> 100 ta bobni o'qib, mashqlarini bajarsangiz — <b>Senior PostgreSQL Developer</b> darajasiga yetdingiz!<br>
+📌 <b>Keyingi qadam:</b> Real loyiha quring, EXPLAIN ANALYZE bilan optimallashtirib, production ga chiqaring!
+</div>
+</div><div class="sep"></div>
+
 <div class="ch">
     <div class="ch-n">Qo'shimcha</div>
     <div class="ch-t">SQL So'rov Bajarilish Tartibi</div>
@@ -1698,7 +3082,7 @@ pg_restore --clean -d ecommerce backup.dump        <span class="cm">◄--- Avval
     </div>
 </div>
 <div class="footer">
-    <b style="color:#fff;font-family:Outfit,sans-serif;font-size:1rem">PostgreSQL To'liq Amaliy Darslik — 62 Bob</b><br> Har bir buyruq amaliy natijasi bilan | O'zbek tilida
+    <b style="color:#fff;font-family:Outfit,sans-serif;font-size:1rem">PostgreSQL To'liq Amaliy Darslik — 100 Bob</b><br> Har bir buyruq amaliy natijasi bilan | O'zbek tilida
 </div>
 </div>
 </body>
